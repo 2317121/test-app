@@ -29,13 +29,18 @@
                 Question <span id="current-index">1</span> / <span id="total-count">5</span>
             </div>
 
-            <div class="flashcard-container" onclick="app.flipCard()">
+            <div class="flashcard-container" id="flashcard-container">
                 <div class="flashcard" id="flashcard">
                     <div class="card-face card-front">
                         <div class="card-label">Question</div>
                         <div class="card-content" id="card-question">
                             ここに問題が表示されます
                         </div>
+                        <!-- Image on Front -->
+                        <img id="card-image-front" class="card-image hidden" alt="Question Image">
+                        <button class="btn-audio" onclick="app.speakQuestion(event)" title="読み上げ">
+                            <i data-lucide="volume-2"></i>
+                        </button>
                     </div>
                     <div class="card-face card-back">
                         <div class="card-label">Answer</div>
@@ -47,14 +52,14 @@
             </div>
 
             <div class="controls">
-                <button class="btn" onclick="app.prevCard()">
-                    <i data-lucide="arrow-left"></i> 前へ
+                <button class="btn btn-swipe-left" onclick="app.swipeLeft()">
+                    <i data-lucide="x"></i> まだ
                 </button>
-                <button class="btn btn-primary" onclick="app.toggleShuffle()">
-                    <i data-lucide="shuffle"></i> シャッフル
+                <button class="btn" onclick="app.flipCard()">
+                    <i data-lucide="rotate-cw"></i> めくる
                 </button>
-                <button class="btn" onclick="app.nextCard()">
-                    次へ <i data-lucide="arrow-right"></i>
+                <button class="btn btn-swipe-right" onclick="app.swipeRight()">
+                    覚えた <i data-lucide="check"></i>
                 </button>
             </div>
         </div>
@@ -71,10 +76,28 @@
                     <label for="input-answer">答え</label>
                     <textarea id="input-answer" required placeholder="答えを入力..."></textarea>
                 </div>
+                <div class="form-group">
+                    <label for="input-image">画像 (任意)</label>
+                    <input type="file" id="input-image" accept="image/*">
+                </div>
                 <button type="submit" class="btn btn-primary">
                     <i data-lucide="plus"></i> 追加する
                 </button>
             </form>
+
+            <div class="Backup-controls"
+                style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                <h3>データのバックアップ</h3>
+                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                    <button class="btn" onclick="app.exportCSV()">
+                        <i data-lucide="download"></i> CSVエクスポート
+                    </button>
+                    <label class="btn btn-outline" style="cursor: pointer;">
+                        <i data-lucide="upload"></i> CSVインポート
+                        <input type="file" onchange="app.importCSV(this)" accept=".csv" style="display: none;">
+                    </label>
+                </div>
+            </div>
 
             <div class="card-list">
                 <h2>登録済みの問題 (<span id="list-count">0</span>)</h2>
@@ -83,12 +106,59 @@
                 </div>
             </div>
         </div>
+
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="view hidden">
+            <h2>学習データの分析</h2>
+            <div class="stats-container">
+                <div class="stat-box">
+                    <h3>学習率</h3>
+                    <div class="pie-chart" id="status-chart"></div>
+                    <div class="stat-legend">
+                        <div><span class="dot-known"></span> 覚えた: <span id="stat-known">0</span></div>
+                        <div><span class="dot-unknown"></span> まだ: <span id="stat-unknown">0</span></div>
+                    </div>
+                </div>
+                <div class="stat-box">
+                    <h3>登録数</h3>
+                    <p class="stat-number" id="stat-total">0</p>
+                </div>
+            </div>
+        </div>
     </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" id="nav-study" onclick="app.setMode('study')">
+            <i data-lucide="book-open"></i>
+            <span>学習</span>
+        </button>
+        <button class="nav-item" id="nav-dashboard" onclick="app.setMode('dashboard')">
+            <i data-lucide="bar-chart-2"></i>
+            <span>データ</span>
+        </button>
+        <button class="nav-item" id="nav-edit" onclick="app.setMode('edit')">
+            <i data-lucide="edit-3"></i>
+            <span>編集</span>
+        </button>
+    </nav>
 
     <script src="data.js"></script>
     <script src="script.js"></script>
     <script>
         lucide.createIcons();
+
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    }, err => {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
     </script>
 </body>
 

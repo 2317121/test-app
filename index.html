@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>技能照査 勉強アプリ</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2997/2997327.png">
+    <meta name="theme-color" content="#6366f1">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <header>
+        <h1>技能照査ドリル</h1>
+        <nav>
+            <button id="nav-study" class="active" onclick="app.setMode('study')">学習モード</button>
+            <button id="nav-edit" onclick="app.setMode('edit')">編集モード</button>
+        </nav>
+    </header>
+
+    <main>
+        <!-- Study Mode -->
+        <div id="study-view" class="study-container">
+            <div class="progress-info">
+                Question <span id="current-index">1</span> / <span id="total-count">5</span>
+            </div>
+
+            <div class="flashcard-container" onclick="app.flipCard()">
+                <div class="flashcard" id="flashcard">
+                    <div class="card-face card-front">
+                        <div class="card-label">Question</div>
+                        <div class="card-content" id="card-question">
+                            ここに問題が表示されます
+                        </div>
+                    </div>
+                    <div class="card-face card-back">
+                        <div class="card-label">Answer</div>
+                        <div class="card-content" id="card-answer">
+                            ここに答えが表示されます
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button class="btn" onclick="app.prevCard()">
+                    <i data-lucide="arrow-left"></i> 前へ
+                </button>
+                <button class="btn btn-primary" onclick="app.toggleShuffle()">
+                    <i data-lucide="shuffle"></i> シャッフル
+                </button>
+                <button class="btn" onclick="app.nextCard()">
+                    次へ <i data-lucide="arrow-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Edit Mode -->
+        <div id="edit-view" class="edit-container hidden">
+            <h2>新しい問題を追加</h2>
+            <form id="add-card-form" onsubmit="app.addCard(event)">
+                <div class="form-group">
+                    <label for="input-question">問題</label>
+                    <textarea id="input-question" required placeholder="問題文を入力..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="input-answer">答え</label>
+                    <textarea id="input-answer" required placeholder="答えを入力..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i data-lucide="plus"></i> 追加する
+                </button>
+            </form>
+
+            <div class="card-list">
+                <h2>登録済みの問題 (<span id="list-count">0</span>)</h2>
+                <div id="card-list-container">
+                    <!-- List items will be injected here -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="data.js"></script>
+    <script src="script.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>

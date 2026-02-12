@@ -19,10 +19,15 @@
         <button class="nav-item active" id="nav-study" onclick="app.setMode('study')">
             <i data-lucide="book-open"></i>
             <span>学習</span>
+            <span id="streak-badge" class="badge hidden">🔥 0</span>
         </button>
         <button class="nav-item" id="nav-dashboard" onclick="app.setMode('dashboard')">
             <i data-lucide="bar-chart-2"></i>
             <span>データ</span>
+        </button>
+        <button class="nav-item" id="nav-quiz" onclick="app.setMode('quiz')">
+            <i data-lucide="check-circle"></i>
+            <span>テスト</span>
         </button>
         <button class="nav-item" id="nav-edit" onclick="app.setMode('edit')">
             <i data-lucide="edit-3"></i>
@@ -66,60 +71,86 @@
                 </div>
             </div>
 
-            <div class="controls">
-                <button class="btn btn-swipe-left" onclick="app.swipeLeft()">
-                    <i data-lucide="x"></i> まだ
+            <!-- Controls -->
+            <div class="controls" style="flex-wrap: wrap; justify-content: center; gap: 0.5rem;">
+                <button class="btn btn-swipe-left" onclick="app.rateCard(1)"
+                    style="min-width: 100px; padding: 0.5rem 1rem;">
+                    😢 忘れた
                 </button>
-                <button class="btn" onclick="app.flipCard()">
-                    <i data-lucide="rotate-cw"></i> めくる
+                <button id="btn-auto-play" class="btn" onclick="app.toggleAutoPlay()"
+                    style="min-width: 60px; padding: 0.5rem;">
+                    ▶ 自動
                 </button>
-                <button class="btn btn-swipe-right" onclick="app.swipeRight()">
-                    覚えた <i data-lucide="check"></i>
+                <button class="btn" onclick="app.flipCard()" style="min-width: 60px; padding: 0.5rem;">
+                    めくる
+                </button>
+                <button class="btn btn-swipe-right" onclick="app.rateCard(4)"
+                    style="min-width: 100px; padding: 0.5rem 1rem;">
+                    😄 完璧
                 </button>
             </div>
         </div>
 
-        <!-- Edit Mode -->
-        <div id="edit-view" class="edit-container hidden">
-            <h2>新しい問題を追加</h2>
-            <form id="add-card-form" onsubmit="app.addCard(event)">
-                <div class="form-group">
-                    <label for="input-question">問題</label>
-                    <textarea id="input-question" required placeholder="問題文を入力..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="input-answer">答え</label>
-                    <textarea id="input-answer" required placeholder="答えを入力..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="input-image">画像 (任意)</label>
-                    <input type="file" id="input-image" accept="image/*">
-                </div>
-                <button type="submit" class="btn btn-primary">
-                    <i data-lucide="plus"></i> 追加する
-                </button>
-            </form>
-
-            <div class="Backup-controls"
-                style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-                <h3>データのバックアップ</h3>
-                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
-                    <button class="btn" onclick="app.exportCSV()">
-                        <i data-lucide="download"></i> CSVエクスポート
-                    </button>
-                    <label class="btn btn-outline" style="cursor: pointer;">
-                        <i data-lucide="upload"></i> CSVインポート
-                        <input type="file" onchange="app.importCSV(this)" accept=".csv" style="display: none;">
-                    </label>
+        <!-- Edit View -->
+        <div id="edit-view" class="view hidden">
+            <div class="header-actions"
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2>問題リスト (<span id="list-count">0</span>)</h2>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-sm"
+                        onclick="app.importCSV(document.getElementById('csv-input'))">CSV読込</button>
+                    <input type="file" id="csv-input" accept=".csv" style="display: none;"
+                        onchange="app.importCSV(this)">
+                    <button class="btn btn-sm" onclick="app.exportCSV()">CSV保存</button>
                 </div>
             </div>
 
-            <div class="card-list">
-                <h2>登録済みの問題 (<span id="list-count">0</span>)</h2>
-                <div id="card-list-container">
-                    <!-- List items will be injected here -->
+            <!-- Add Button (Floating or Top) -->
+            <button class="btn btn-primary" onclick="app.openModal('add')"
+                style="width: 100%; margin-bottom: 1rem; justify-content: center;">
+                <i data-lucide="plus"></i> 問題を追加
+            </button>
+
+            <!-- Modal for Add/Edit -->
+            <div id="edit-modal" class="modal-overlay hidden">
+                <div class="modal-content">
+                    <h3 id="modal-title">問題を追加</h3>
+                    <form id="add-card-form" onsubmit="app.handleFormSubmit(event)">
+                        <div class="form-group">
+                            <label>問題文</label>
+                            <textarea id="input-question" required placeholder="例: 交流回路におけるインピーダンスとは？"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>答え</label>
+                            <textarea id="input-answer" required
+                                placeholder="例: 電流の流れにくさを表す量で、抵抗とリアクタンスのベクトル和。"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>タグ (カンマ区切り)</label>
+                            <input type="text" id="input-tags" placeholder="例: 電気, 法規, 公式">
+                        </div>
+                        <div class="form-group">
+                            <label>画像 (任意)</label>
+                            <input type="file" id="input-image" accept="image/*">
+                        </div>
+                        <div class="form-actions" style="display: flex; gap: 1rem; justify-content: flex-end;">
+                            <button type="button" class="btn" onclick="app.closeModal()">キャンセル</button>
+                            <button type="submit" id="btn-submit-card" class="btn btn-primary">追加</button>
+                        </div>
+                    </form>
                 </div>
             </div>
+
+            <!-- Search & Filter -->
+            <div class="search-container" style="margin-bottom: 1rem;">
+                <input type="text" id="search-input" placeholder="検索 (キーワード)..." oninput="app.renderEditMode()">
+                <select id="tag-filter" onchange="app.renderEditMode()">
+                    <option value="">全てのタグ</option>
+                </select>
+            </div>
+
+            <!-- List Container -->
+            <div id="card-list-container" class="card-list" style="margin-top: 0;"></div>
         </div>
 
         <!-- Dashboard View -->
@@ -139,8 +170,54 @@
                     <p class="stat-number" id="stat-total">0</p>
                 </div>
             </div>
+
+            <!-- Learning Heatmap -->
+            <div style="width: 100%; overflow-x: auto; margin-top: 2rem; margin-bottom: 2rem;">
+                <h3 style="font-size: 1rem; color: var(--text-secondary); margin-bottom: 0.5rem;">学習記録 (過去90日)</h3>
+                <div id="heatmap-container" class="heatmap-grid"></div>
+            </div>
+        </div>
+
+        <!-- Quiz View -->
+        <div id="quiz-view" class="view hidden">
+            <div id="quiz-start">
+                <h2>実力テスト</h2>
+                <p>ランダムに10問出題されます。</p>
+                <div class="form-group">
+                    <label>形式</label>
+                    <select id="quiz-type">
+                        <option value="4choice">4択クイズ</option>
+                        <!-- <option value="input">記述式</option> -->
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="app.startQuiz()">テストを開始</button>
+            </div>
+
+            <div id="quiz-question-container" class="hidden">
+                <div class="quiz-header">
+                    <span id="quiz-progress">1 / 10</span>
+                    <span id="quiz-score">Score: 0</span>
+                </div>
+                <div class="card">
+                    <div id="quiz-question-text" class="card-question"></div>
+                    <img id="quiz-image" class="card-image hidden">
+                </div>
+                <div id="quiz-choices" class="choices-grid">
+                    <!-- Buttons injected here -->
+                </div>
+            </div>
+
+            <div id="quiz-result" class="hidden">
+                <h2>結果発表</h2>
+                <p id="score-message">素晴らしい！</p>
+                <button class="btn btn-primary" onclick="app.renderQuizStart()">もう一度</button>
+            </div>
         </div>
     </main>
+
+    <!-- Top Navigation -->
+    <!-- Moved nav to body top, updating here just in case I missed the location in previous edits -->
+    <!-- Assuming nav is already at top based on previous steps -->
 
     <script src="data.js"></script>
     <script src="script.js"></script>

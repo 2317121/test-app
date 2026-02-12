@@ -14,12 +14,27 @@
 </head>
 
 <body>
-    <header>
+    <!-- Top Navigation -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" id="nav-study" onclick="app.setMode('study')">
+            <i data-lucide="book-open"></i>
+            <span>学習</span>
+        </button>
+        <button class="nav-item" id="nav-dashboard" onclick="app.setMode('dashboard')">
+            <i data-lucide="bar-chart-2"></i>
+            <span>データ</span>
+        </button>
+        <button class="nav-item" id="nav-edit" onclick="app.setMode('edit')">
+            <i data-lucide="edit-3"></i>
+            <span>編集</span>
+        </button>
+    </nav>
+
+    <header class="app-header" style="display: none;">
         <h1>技能照査ドリル</h1>
-        <nav>
-            <button id="nav-study" class="active" onclick="app.setMode('study')">学習モード</button>
-            <button id="nav-edit" onclick="app.setMode('edit')">編集モード</button>
-        </nav>
+        <button class="btn btn-sm" id="pwa-install-btn" style="display: none;">
+            インストール
+        </button>
     </header>
 
     <main>
@@ -126,22 +141,6 @@
             </div>
         </div>
     </main>
-
-    <!-- Bottom Navigation -->
-    <nav class="bottom-nav">
-        <button class="nav-item active" id="nav-study" onclick="app.setMode('study')">
-            <i data-lucide="book-open"></i>
-            <span>学習</span>
-        </button>
-        <button class="nav-item" id="nav-dashboard" onclick="app.setMode('dashboard')">
-            <i data-lucide="bar-chart-2"></i>
-            <span>データ</span>
-        </button>
-        <button class="nav-item" id="nav-edit" onclick="app.setMode('edit')">
-            <i data-lucide="edit-3"></i>
-            <span>編集</span>
-        </button>
-    </nav>
 
     <script src="data.js"></script>
     <script src="script.js"></script>

@@ -45,6 +45,12 @@
     <main>
         <!-- Study Mode -->
         <div id="study-view" class="study-container">
+            <div class="folder-select-container" style="margin-bottom: 10px; text-align: center;">
+                <select id="folder-select" onchange="app.handleFolderChange(this.value)"
+                    style="padding: 8px; border-radius: 8px; border: 1px solid #ddd; width: 80%; max-width: 300px; font-size: 16px;">
+                    <option value="All">すべて</option>
+                </select>
+            </div>
             <div class="progress-info">
                 Question <span id="current-index">1</span> / <span id="total-count">5</span>
             </div>
@@ -96,12 +102,16 @@
             <div class="header-actions"
                 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <h2>問題リスト (<span id="list-count">0</span>)</h2>
-                <div style="display: flex; gap: 0.5rem;">
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                     <button class="btn btn-sm"
                         onclick="app.importCSV(document.getElementById('csv-input'))">CSV読込</button>
                     <input type="file" id="csv-input" accept=".csv" style="display: none;"
                         onchange="app.importCSV(this)">
                     <button class="btn btn-sm" onclick="app.exportCSV()">CSV保存</button>
+                    <button class="btn btn-sm" onclick="app.exportJSON()">バックアップ(JSON)</button>
+                    <button class="btn btn-sm" onclick="document.getElementById('json-input').click()">復元(JSON)</button>
+                    <input type="file" id="json-input" accept=".json" style="display: none;"
+                        onchange="app.importJSON(this)">
                 </div>
             </div>
 
@@ -126,6 +136,12 @@
                                 placeholder="例: 電流の流れにくさを表す量で、抵抗とリアクタンスのベクトル和。"></textarea>
                         </div>
                         <div class="form-group">
+                            <label>フォルダ</label>
+                            <input type="text" id="input-folder" list="folder-list" placeholder="フォルダ名 (例: メイン)"
+                                style="padding: 10px; border: 1px solid #ddd; border-radius: 8px; width: 100%; box-sizing: border-box;">
+                            <datalist id="folder-list"></datalist>
+                        </div>
+                        <div class="form-group">
                             <label>タグ (カンマ区切り)</label>
                             <input type="text" id="input-tags" placeholder="例: 電気, 法規, 公式">
                         </div>
@@ -143,10 +159,31 @@
 
             <!-- Search & Filter -->
             <div class="search-container" style="margin-bottom: 1rem;">
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <select id="edit-folder-select" onchange="app.handleFolderChange(this.value)"
+                        style="padding: 8px; border-radius: 4px; border: 1px solid #ddd; flex: 1;">
+                        <option value="All">すべてのフォルダ</option>
+                    </select>
+                    <button class="btn" style="padding: 8px;" onclick="app.createFolder()">
+                        <i data-lucide="folder-plus"></i>
+                    </button>
+                </div>
                 <input type="text" id="search-input" placeholder="検索 (キーワード)..." oninput="app.renderEditMode()">
                 <select id="tag-filter" onchange="app.renderEditMode()">
                     <option value="">全てのタグ</option>
                 </select>
+            </div>
+
+            <!-- Bulk Action Bar -->
+            <div id="bulk-action-bar" class="hidden"
+                style="background: #f0f9ff; padding: 10px; margin-bottom: 1rem; border-radius: 8px; border: 1px solid #bae6fd; display: flex; align-items: center; gap: 10px;">
+                <span style="font-weight: bold; color: #0284c7;"><span id="bulk-selected-count">0</span> 件選択中</span>
+                <select id="bulk-folder-select"
+                    style="padding: 5px; border-radius: 4px; border: 1px solid #ccc; flex: 1;">
+                    <!-- Populated by script -->
+                </select>
+                <button class="btn btn-sm" onclick="app.moveSelectedCards()"
+                    style="background: #0284c7; color: white; padding: 5px 10px;">移動</button>
             </div>
 
             <!-- List Container -->

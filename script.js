@@ -12,10 +12,13 @@ class App {
             editingId: null,
             lastStudyDate: null,
             streak: 0,
+            currentFolder: 'All', // 'All' or specific folder name
+            folders: ['メイン'],
             studyLog: {} // { "YYYY-MM-DD": count }
         };
 
-        this.state = JSON.parse(localStorage.getItem('flashcard_app_data')) || defaultState;
+        // this.state will be populated by loadData
+        this.state = defaultState;
 
         // Ensure studyLog exists (migration)
         if (!this.state.studyLog) this.state.studyLog = {};
@@ -35,18 +38,33 @@ class App {
     }
 
     init() {
-        this.loadData();
-        // Migrating old data schema if necessary (adding image property)
-        this.state.cards.forEach(card => {
-            if (!card.hasOwnProperty('image')) card.image = null;
-            if (!card.hasOwnProperty('status')) card.status = 'unknown'; // 'known', 'unknown'
-            if (!card.hasOwnProperty('tags')) card.tags = []; // New in Phase 4
-        });
+        console.log("App initializing...");
+        try {
+            this.loadData();
+            console.log("Data loaded. Cards:", this.state.cards ? this.state.cards.length : "null");
 
-        this.updateShuffleOrder();
-        this.render();
-        this.setupSwipeListeners();
-        this.updateStreakBadge(); // Ensure badge is updated on init
+            if (!Array.isArray(this.state.cards)) {
+                console.error("Cards is not an array, resetting.");
+                this.state.cards = [];
+            }
+
+            // Migrating old data schema if necessary (adding image property)
+            this.state.cards.forEach(card => {
+                if (!card) return; // Guard against null cards
+                if (!card.hasOwnProperty('image')) card.image = null;
+                if (!card.hasOwnProperty('status')) card.status = 'unknown'; // 'known', 'unknown'
+                if (!card.hasOwnProperty('tags')) card.tags = []; // New in Phase 4
+            });
+
+            this.updateShuffleOrder();
+            this.render();
+            this.setupSwipeListeners();
+            this.updateStreakBadge(); // Ensure badge is updated on init
+            console.log("App initialized successfully.");
+        } catch (e) {
+            console.error("Error during init details:", e);
+            throw e;
+        }
 
         // Global access for HTML event handlers
         window.app = this;
@@ -111,64 +129,187 @@ class App {
     // --- Data Management ---
 
     loadData() {
-        const saved = localStorage.getItem('skillTestCards');
-        const savedMeta = localStorage.getItem('skillTestMeta');
+        try {
+            // New unified storage (v2 reset)
+            const savedState = localStorage.getItem('skillTestAppState_v2');
 
-        if (saved) {
-            this.state.cards = JSON.parse(saved);
-        } else {
-            this.state.cards = [...window.initialData];
-        }
+            // Legacy storage (fallback)
+            // const legacyCards = localStorage.getItem('skillTestCards'); // Disable legacy for clean slate
+            const legacyCards = null;
+            const legacyMeta = localStorage.getItem('skillTestMeta');
 
-        // Initialize SRS fields if missing
-        this.state.cards.forEach(card => {
-            if (!card.srs) {
-                card.srs = {
-                    interval: 0,
-                    reps: 0,
-                    ef: 2.5,
-                    nextReview: Date.now()
-                };
+            if (savedState) {
+                const parsed = JSON.parse(savedState);
+                // Merge parsed state into default structure to ensure new fields exist
+                this.state = { ...this.state, ...parsed };
+
+                // Ensure cards is array
+                if (!Array.isArray(this.state.cards)) {
+                    console.warn("State cards not array, resetting.");
+                    this.state.cards = [...(window.initialData || [])];
+                }
+            } else if (legacyCards) {
+                // Migration path
+                console.log("Migrating legacy data...");
+                try {
+                    this.state.cards = JSON.parse(legacyCards);
+                    if (legacyMeta) {
+                        const meta = JSON.parse(legacyMeta);
+                        this.state.streak = meta.streak || 0;
+                        this.state.lastStudyDate = meta.lastStudyDate || null;
+                    }
+                } catch (e) {
+                    console.error("Migration failed, using default.");
+                    this.state.cards = [...(window.initialData || [])];
+                }
+            } else {
+                // First run
+                if (window.initialData) {
+                    this.state.cards = [...window.initialData];
+                } else {
+                    this.state.cards = [];
+                }
             }
-        });
 
-        if (savedMeta) {
-            const meta = JSON.parse(savedMeta);
-            this.state.streak = meta.streak || 0;
-            this.state.lastStudyDate = meta.lastStudyDate || null;
+            // FORCE MODE TO STUDY ON LOAD
+            this.state.mode = 'study';
+            this.state.isFlipped = false;
+            this.state.editingId = null;
+
+            // Merge initialData if new questions are added
+            if (window.initialData) {
+                window.initialData.forEach(initCard => {
+                    // Check if card with this ID exists
+                    const exists = this.state.cards.some(c => c.id === initCard.id);
+                    if (!exists) {
+                        console.log("Adding new card from initialData:", initCard.id);
+                        // Initialize with default state
+                        const newCard = {
+                            ...initCard,
+                            status: 'unknown',
+                            srs: { interval: 0, reps: 0, ef: 2.5, nextReview: Date.now() },
+                            tags: []
+                        };
+                        this.state.cards.push(newCard);
+                    }
+                });
+            }
+
+            // Fix Invalid Statuses
+            let fixedCount = 0;
+            this.state.cards.forEach(card => {
+                if (!card) return;
+                // Fix Status
+                if (card.status !== 'known' && card.status !== 'unknown') {
+                    card.status = 'unknown';
+                    fixedCount++;
+                }
+                // Fix SRS
+                if (!card.srs) {
+                    card.srs = { interval: 0, reps: 0, ef: 2.5, nextReview: Date.now() };
+                }
+                // Fix Tags
+                if (!card.tags) card.tags = [];
+                // Fix Folder
+                if (!card.folder) card.folder = 'メイン';
+            });
+            // Initialize Folders
+            if (!Array.isArray(this.state.folders)) {
+                this.state.folders = ['メイン'];
+            }
+            // Merge from cards (recover lost folders)
+            this.state.cards.forEach(c => {
+                if (c.folder && !this.state.folders.includes(c.folder)) {
+                    this.state.folders.push(c.folder);
+                }
+            });
+            // Ensure unique and sorted
+            this.state.folders = [...new Set(this.state.folders)].sort();
+
+            this.saveData();
+        } catch (e) {
+            console.error("loadData failed:", e);
+            alert("データの読み込みに失敗しました。");
         }
-
-        this.saveData(); // Save normalized data
     }
 
     saveData() {
         try {
-            localStorage.setItem('skillTestCards', JSON.stringify(this.state.cards));
-            localStorage.setItem('skillTestMeta', JSON.stringify({
-                streak: this.state.streak,
-                lastStudyDate: this.state.lastStudyDate
-            }));
+            // Save entire state including current index and mode
+            // Save entire state including current index and mode
+            localStorage.setItem('skillTestAppState_v2', JSON.stringify(this.state));
+
+            // Cleanup legacy (optional, but good to avoid confusion)
+            localStorage.removeItem('skillTestCards');
+            localStorage.removeItem('skillTestMeta');
+            localStorage.removeItem('flashcard_app_data');
         } catch (e) {
-            alert('保存に失敗しました。画像のサイズが大きすぎる可能性があります。');
-            console.error(e);
+            console.error("Save failed:", e);
         }
+
+        // Ensure shuffle order exists (Modified to allow subsets for review mode)
+        if (!this.state.shuffledIndices || (this.state.cards.length > 0 && this.state.shuffledIndices.length === 0)) {
+            console.warn("Shuffle indices missing or empty, regenerating.");
+            this.updateShuffleOrder();
+        }
+
         this.render();
     }
 
-    updateShuffleOrder() {
-        // Filter out "Known" cards if we want to study only unknown?
-        // For now, let's keep all cards but prioritize unknown? 
-        // Simplified: Just shuffle everything for now.
+    createFolder() {
+        const name = prompt("新しいフォルダ名を入力してください:");
+        if (!name) return;
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        if (this.state.folders.includes(trimmed)) {
+            alert("そのフォルダは既に存在します。");
+            return;
+        }
+        this.state.folders.push(trimmed);
+        this.state.folders.sort();
+        this.saveData();
+        this.renderFolderSelector();
+        if (this.state.mode === 'edit') this.renderEditMode();
+        alert(`フォルダ「${trimmed}」を作成しました。`);
+    }
 
-        this.state.shuffledIndices = this.state.cards.map((_, i) => i);
+    updateShuffleOrder(filterFn = null) {
+        // Filter cards if a function is provided
+        let targetCards = this.state.cards;
+
+        // Filter by Folder
+        if (this.state.currentFolder && this.state.currentFolder !== 'All') {
+            targetCards = targetCards.filter(c => c.folder === this.state.currentFolder);
+        }
+        if (filterFn) {
+            targetCards = targetCards.filter(filterFn);
+            if (targetCards.length === 0) {
+                alert("該当するカードがありません。フォルダ内の全てのカードを対象にします。");
+                targetCards = this.state.cards;
+                if (this.state.currentFolder && this.state.currentFolder !== 'All') {
+                    targetCards = targetCards.filter(c => c.folder === this.state.currentFolder);
+                }
+            }
+        }
+
+        // Map IDs to original indices
+        this.state.shuffledIndices = targetCards.map(c => this.state.cards.indexOf(c));
+
         // Fisher-Yates shuffle
         for (let i = this.state.shuffledIndices.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [this.state.shuffledIndices[i], this.state.shuffledIndices[j]] =
                 [this.state.shuffledIndices[j], this.state.shuffledIndices[i]];
         }
+        // Limit to 20 for testing - REMOVED
+        // if (this.state.shuffledIndices.length > 20) {
+        //     this.state.shuffledIndices = this.state.shuffledIndices.slice(0, 20);
+        // }
         this.state.currentIndex = 0; // Reset to start
         this.state.isFlipped = false;
+
+        // Save the new order and index immediately
+        this.saveData();
     }
 
     get currentCard() {
@@ -214,24 +355,42 @@ class App {
         this.saveData();
     }
 
+    trackStudyActivity() {
+        const today = new Date().toISOString().split('T')[0];
+        if (!this.state.studyLog) this.state.studyLog = {};
+        this.state.studyLog[today] = (this.state.studyLog[today] || 0) + 1;
+    }
+
     // Called by UI buttons
     rateCard(quality) {
+        if (this.isProcessing) return;
+        this.isProcessing = true;
+
+        console.log("rateCard Button Pressed:", quality);
         const cardEl = document.getElementById('flashcard');
         const dir = quality <= 2 ? 'left' : 'right';
 
         if (cardEl) {
+            console.log("Adding class:", `swipe-${dir}`);
             cardEl.classList.add(`swipe-${dir}`);
+        } else {
+            console.warn("flashcard element not found!");
+            this.isProcessing = false;
+            return;
         }
 
-        // Animate first, then process logic after delay
         setTimeout(() => {
-            this.answerCard(quality);
-            // answerCard now needs to call saveData/render again? 
-            // or we manually call it here. 
-            // Let's restore answerCard to be self-contained for safety, 
-            // but we need to prevent it from rendering if we want smooth animation?
-            // Actually, if we render, the animation class is lost, which is desired at the END of animation.
-            this.nextCard();
+            try {
+                console.log("Animate done, proceeding.");
+                this.answerCard(quality);
+                this.nextCard();
+            } catch (e) {
+                console.error("Error in rateCard:", e);
+                alert("エラーが発生しました: " + e.message);
+            } finally {
+                this.isProcessing = false;
+                if (cardEl) cardEl.classList.remove(`swipe-${dir}`);
+            }
         }, 300);
     }
 
@@ -283,21 +442,46 @@ class App {
         cardEl.classList.add(`swipe-${direction}`);
 
         setTimeout(() => {
-            cardEl.classList.remove(`swipe-${direction}`);
-            this.nextCard();
+            try {
+                cardEl.classList.remove(`swipe-${direction}`);
+                this.nextCard();
+            } catch (e) {
+                console.error("Error in animateSwipe:", e);
+            }
         }, 300);
     }
 
     nextCard() {
-        if (this.state.currentIndex < this.state.cards.length - 1) {
+        console.log("nextCard:", this.state.currentIndex, "/", this.state.cards.length);
+        if (this.state.currentIndex < this.state.shuffledIndices.length - 1) {
             this.state.currentIndex++;
             this.state.isFlipped = false;
             this.render();
         } else {
-            alert('一通り学習しました！シャッフルして最初に戻ります。');
-            this.updateShuffleOrder();
-            this.render();
+            // End of deck
+            this.handleEndOfDeck();
         }
+    }
+
+    handleEndOfDeck() {
+        // Check if there are unknown cards
+        const unknowns = this.state.cards.filter(c => c.status === 'unknown').length;
+
+        if (unknowns > 0) {
+            if (confirm(`一通り学習しました！\nまだ覚えていない（苦手）カードが ${unknowns} 枚あります。\n苦手なカードだけを復習しますか？\n（キャンセルを押すと全てのカードをシャッフルして再開します）`)) {
+                this.updateShuffleOrder(c => c.status === 'unknown');
+            } else {
+                this.updateShuffleOrder();
+            }
+        } else {
+            alert('素晴らしい！全てのカードを「覚えた」にしました！\n再度全てのカードをシャッフルして学習します。');
+            this.updateShuffleOrder();
+        }
+
+        // Ensure start from beginning
+        this.state.currentIndex = 0;
+        this.saveData();
+        this.render();
     }
 
     prevCard() {
@@ -348,6 +532,7 @@ class App {
     resetForm() {
         document.getElementById('input-question').value = '';
         document.getElementById('input-answer').value = '';
+        document.getElementById('input-folder').value = '';
         document.getElementById('input-image').value = '';
         document.getElementById('input-tags').value = '';
     }
@@ -357,6 +542,7 @@ class App {
         if (!card) return;
         document.getElementById('input-question').value = card.question;
         document.getElementById('input-answer').value = card.answer;
+        document.getElementById('input-folder').value = card.folder || 'メイン';
         document.getElementById('input-tags').value = (card.tags || []).join(', ');
     }
 
@@ -364,18 +550,19 @@ class App {
         event.preventDefault();
         const qInput = document.getElementById('input-question');
         const aInput = document.getElementById('input-answer');
+        const folderInput = document.getElementById('input-folder');
         const imageInput = document.getElementById('input-image');
         const tagsInput = document.getElementById('input-tags');
 
         if (this.state.editingId) {
-            await this.updateCard(qInput, aInput, imageInput, tagsInput);
+            await this.updateCard(qInput, aInput, imageInput, tagsInput, folderInput);
         } else {
-            await this.addCard(qInput, aInput, imageInput, tagsInput);
+            await this.addCard(qInput, aInput, imageInput, tagsInput, folderInput);
         }
         this.closeModal();
     }
 
-    async addCard(qInput, aInput, imageInput, tagsInput) {
+    async addCard(qInput, aInput, imageInput, tagsInput, folderInput) {
         let imageData = null;
         if (imageInput.files && imageInput.files[0]) {
             try {
@@ -387,11 +574,13 @@ class App {
         }
 
         const tags = tagsInput.value.split(',').map(t => t.trim()).filter(t => t);
+        const folder = (folderInput && folderInput.value.trim()) ? folderInput.value.trim() : 'メイン';
 
         const newCard = {
             id: Date.now().toString(),
             question: qInput.value,
             answer: aInput.value,
+            folder: folder,
             image: imageData,
             tags: tags,
             status: 'unknown',
@@ -399,17 +588,22 @@ class App {
         };
 
         this.state.cards.push(newCard);
+
+        // Add new card to current shuffle order so it appears immediately
+        this.state.shuffledIndices.push(this.state.cards.length - 1);
+
         this.saveData();
-        alert('問題を追加しました。');
+        alert('問題を追加しました。次の問題として表示されます(または列の最後に追加されました)。');
     }
 
-    async updateCard(qInput, aInput, imageInput, tagsInput) {
+    async updateCard(qInput, aInput, imageInput, tagsInput, folderInput) {
         const cardIndex = this.state.cards.findIndex(c => c.id === this.state.editingId);
         if (cardIndex === -1) return;
 
         const card = this.state.cards[cardIndex];
         card.question = qInput.value;
         card.answer = aInput.value;
+        card.folder = (folderInput && folderInput.value.trim()) ? folderInput.value.trim() : 'メイン';
         card.tags = tagsInput.value.split(',').map(t => t.trim()).filter(t => t);
 
         if (imageInput.files && imageInput.files[0]) {
@@ -422,6 +616,11 @@ class App {
 
         this.saveData();
         alert('問題を更新しました。');
+
+        // If we are currently studying this card, re-render to show changes
+        if (this.currentCard && this.currentCard.id === this.state.editingId) {
+            this.render();
+        }
     }
 
     resizeImage(file) {
@@ -519,12 +718,17 @@ class App {
                             answer: cols[1],
                             status: cols[2] || 'unknown',
                             tags: cols[3] ? cols[3].split(',').map(t => t.trim()) : [],
-                            image: null
+                            image: null,
+                            srs: { interval: 0, reps: 0, ef: 2.5, nextReview: Date.now() } // Ensure SRS init
                         };
                         this.state.cards.push(newCard);
                         addedCount++;
                     }
                 }
+
+                // Add to shuffle order
+                // This is a bit heavy, maybe just re-shuffle all
+                this.updateShuffleOrder();
 
                 this.saveData();
                 alert(`${addedCount}件の問題をインポートしました。`);
@@ -536,6 +740,53 @@ class App {
             }
         };
 
+        reader.readAsText(file);
+    }
+
+    // --- JSON Import/Export (Backup) ---
+
+    exportJSON() {
+        const dataStr = JSON.stringify(this.state, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const date = new Date().toISOString().split('T')[0];
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `skill_test_backup_${date}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    importJSON(input) {
+        if (!input.files || !input.files[0]) return;
+
+        const file = input.files[0];
+        const reader = new FileReader();
+
+        reader.onload = (e) => {
+            try {
+                const json = JSON.parse(e.target.result);
+
+                // Basic Validation
+                if (!json.cards || !Array.isArray(json.cards)) {
+                    throw new Error("Invalid format: cards array missing");
+                }
+
+                if (confirm('現在のデータを上書きして復元しますか？\n（この操作は取り消せません）')) {
+                    this.state = json;
+                    this.saveData();
+                    alert('復元が完了しました。ページをリロードします。');
+                    window.location.reload();
+                }
+            } catch (err) {
+                console.error(err);
+                alert('JSONの読み込みに失敗しました: ' + err.message);
+            }
+            // Reset
+            input.value = '';
+        };
         reader.readAsText(file);
     }
 
@@ -566,6 +817,7 @@ class App {
 
     setupSwipeListeners() {
         const touchContainer = document.getElementById('flashcard-container');
+        const flashcard = document.getElementById('flashcard');
 
         touchContainer.addEventListener('touchstart', (e) => {
             this.touchStartX = e.changedTouches[0].screenX;
@@ -575,6 +827,15 @@ class App {
             this.touchEndX = e.changedTouches[0].screenX;
             this.handleGesture();
         }, { passive: true });
+
+        // Click to flip
+        if (flashcard) {
+            flashcard.addEventListener('click', (e) => {
+                // Ignore clicks on buttons or if processing
+                if (this.state.isProcessing || e.target.closest('button')) return;
+                this.flipCard();
+            });
+        }
     }
 
     handleGesture() {
@@ -594,6 +855,7 @@ class App {
         if (!this.currentCard) return;
 
         const text = this.currentCard.question;
+        const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'ja-JP'; // Japanese
         speechSynthesis.speak(utterance);
     }
@@ -809,6 +1071,8 @@ class App {
     // --- Rendering ---
 
     render() {
+        this.renderFolderSelector();
+
         // Toggle Views
         const studyView = document.getElementById('study-view');
         const editView = document.getElementById('edit-view');
@@ -850,7 +1114,47 @@ class App {
         }
     }
 
+    renderFolderSelector() {
+        const folderSelect = document.getElementById('folder-select');
+        const folderDatalist = document.getElementById('folder-list');
+
+        // Get unique folders
+        let folders = new Set(['メイン']);
+        if (this.state.folders && Array.isArray(this.state.folders)) {
+            this.state.folders.forEach(f => folders.add(f));
+        }
+        // Safety: Ensure folders from cards are included
+        this.state.cards.forEach(c => {
+            if (c.folder) folders.add(c.folder);
+        });
+        const sortedFolders = Array.from(folders).sort();
+
+        // Update Select (Study View)
+        if (folderSelect) {
+            let html = '<option value="All">すべて</option>';
+            sortedFolders.forEach(f => {
+                const selected = (f === this.state.currentFolder) ? 'selected' : '';
+                html += `<option value="${f}" ${selected}>${f}</option>`;
+            });
+            folderSelect.innerHTML = html;
+            // Ensure value is set correctly even if innerHTML didn't catch it
+            folderSelect.value = this.state.currentFolder || 'All';
+        }
+
+        // Update Datalist (Edit Form)
+        if (folderDatalist) {
+            folderDatalist.innerHTML = sortedFolders.map(f => `<option value="${f}">`).join('');
+        }
+    }
+
     renderStudyMode() {
+        // Safety Check: Ensure index is valid
+        if (this.state.shuffledIndices.length > 0 && this.state.currentIndex >= this.state.shuffledIndices.length) {
+            console.warn("Index out of bounds detected in render. Resetting to 0.");
+            this.state.currentIndex = 0;
+            this.saveData();
+        }
+
         const card = this.currentCard;
         const qEl = document.getElementById('card-question');
         const aEl = document.getElementById('card-answer');
@@ -876,7 +1180,7 @@ class App {
         }
 
         indexEl.textContent = this.state.currentIndex + 1;
-        totalEl.textContent = this.state.cards.length;
+        totalEl.textContent = this.state.shuffledIndices.length;
 
         this.renderCardState();
     }
@@ -888,6 +1192,56 @@ class App {
         } else {
             cardEl.classList.remove('flipped');
         }
+    }
+
+    toggleSelectCard(id, isSelected) {
+        if (!this.state.selectedCards) this.state.selectedCards = [];
+        if (isSelected) {
+            this.state.selectedCards.push(id);
+        } else {
+            this.state.selectedCards = this.state.selectedCards.filter(cid => cid !== id);
+        }
+        this.renderBulkActionBar();
+    }
+
+    renderBulkActionBar() {
+        const bar = document.getElementById('bulk-action-bar');
+        const countSpan = document.getElementById('bulk-selected-count');
+        if (!bar) return;
+
+        const count = this.state.selectedCards ? this.state.selectedCards.length : 0;
+        if (count > 0) {
+            bar.classList.remove('hidden');
+            if (countSpan) countSpan.textContent = count;
+        } else {
+            bar.classList.add('hidden');
+        }
+    }
+
+    moveSelectedCards() {
+        const select = document.getElementById('bulk-folder-select');
+        const targetFolder = select.value;
+        if (!targetFolder) {
+            alert('移動先のフォルダを選択してください。');
+            return;
+        }
+
+        const count = this.state.selectedCards ? this.state.selectedCards.length : 0;
+        if (count === 0) return;
+
+        if (!confirm(`${count}件のカードを「${targetFolder}」に移動しますか？`)) return;
+
+        this.state.cards.forEach(card => {
+            if (this.state.selectedCards.includes(card.id)) {
+                card.folder = targetFolder;
+            }
+        });
+
+        this.state.selectedCards = []; // Clear selection
+        this.saveData();
+        this.renderEditMode();
+        this.renderBulkActionBar(); // Hide bar
+        alert('移動しました。');
     }
 
     renderEditMode() {
@@ -920,7 +1274,9 @@ class App {
         const filteredCards = this.state.cards.filter(card => {
             const matchesKeyword = (card.question.toLowerCase().includes(keyword) || card.answer.toLowerCase().includes(keyword));
             const matchesTag = tagFilter ? (card.tags && card.tags.includes(tagFilter)) : true;
-            return matchesKeyword && matchesTag;
+            const matchesFolder = (this.state.currentFolder && this.state.currentFolder !== 'All')
+                ? (card.folder === this.state.currentFolder) : true;
+            return matchesKeyword && matchesTag && matchesFolder;
         });
 
         countEl.textContent = filteredCards.length;
@@ -930,6 +1286,18 @@ class App {
         filteredCards.forEach(card => {
             const div = document.createElement('div');
             div.className = 'list-item';
+
+            // Checkbox for bulk action
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'select-card-checkbox';
+            checkbox.value = card.id;
+            checkbox.style.marginRight = '10px';
+            if (this.state.selectedCards && this.state.selectedCards.includes(card.id)) {
+                checkbox.checked = true;
+            }
+            checkbox.onchange = (e) => this.toggleSelectCard(card.id, e.target.checked);
+            div.appendChild(checkbox);
 
             let imgHtml = '';
             if (card.image) {
@@ -1022,4 +1390,9 @@ class App {
 }
 
 // Start App
-new App();
+try {
+    new App();
+} catch (e) {
+    console.error("App Init Failed:", e);
+    alert("アプリの起動に失敗しました: " + e.message);
+}

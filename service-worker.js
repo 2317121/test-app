@@ -1,4 +1,4 @@
-const CACHE_NAME = 'skill-test-app-v1';
+const CACHE_NAME = 'skill-test-app-v2';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',

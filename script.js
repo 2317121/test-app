@@ -40,6 +40,7 @@ class App {
     init() {
         console.log("App initializing...");
         try {
+            this.initTheme(); // Initialize theme first
             this.loadData();
             console.log("Data loaded. Cards:", this.state.cards ? this.state.cards.length : "null");
 
@@ -128,10 +129,38 @@ class App {
 
     // --- Data Management ---
 
+    render() {
+        // Toggle Views
+        ['study', 'edit', 'dashboard', 'quiz'].forEach(mode => {
+            const el = document.getElementById(`${mode}-view`);
+            if (el) el.classList.add('hidden');
+        });
+
+        const currentView = document.getElementById(`${this.state.mode}-view`);
+        if (currentView) currentView.classList.remove('hidden');
+
+        // Render sub-components
+        if (this.state.mode === 'study') {
+            this.renderStudyMode();
+        } else if (this.state.mode === 'edit') {
+            this.renderEditMode();
+        } else if (this.state.mode === 'dashboard') {
+            this.renderDashboard();
+        } else if (this.state.mode === 'quiz') {
+            if (!this.quizState) this.renderQuizStart();
+        }
+
+        // Update Nav
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        const navId = `nav-${this.state.mode}`;
+        const navEl = document.getElementById(navId);
+        if (navEl) navEl.classList.add('active');
+    }
+
     loadData() {
         try {
-            // New unified storage (v2 reset)
-            const savedState = localStorage.getItem('skillTestAppState_v2');
+            // New unified storage (v3 reset for folder fix)
+            const savedState = localStorage.getItem('skillTestAppState_v3');
 
             // Legacy storage (fallback)
             // const legacyCards = localStorage.getItem('skillTestCards'); // Disable legacy for clean slate
@@ -147,6 +176,11 @@ class App {
                 if (!Array.isArray(this.state.cards)) {
                     console.warn("State cards not array, resetting.");
                     this.state.cards = [...(window.initialData || [])];
+                }
+
+                // Ensure lockedFolders exists
+                if (!this.state.lockedFolders) {
+                    this.state.lockedFolders = [];
                 }
             } else if (legacyCards) {
                 // Migration path
@@ -236,8 +270,7 @@ class App {
     saveData() {
         try {
             // Save entire state including current index and mode
-            // Save entire state including current index and mode
-            localStorage.setItem('skillTestAppState_v2', JSON.stringify(this.state));
+            localStorage.setItem('skillTestAppState_v3', JSON.stringify(this.state));
 
             // Cleanup legacy (optional, but good to avoid confusion)
             localStorage.removeItem('skillTestCards');
@@ -248,9 +281,9 @@ class App {
         }
 
         // Ensure shuffle order exists (Modified to allow subsets for review mode)
-        if (!this.state.shuffledIndices || (this.state.cards.length > 0 && this.state.shuffledIndices.length === 0)) {
-            console.warn("Shuffle indices missing or empty, regenerating.");
-            this.updateShuffleOrder();
+        // Removed auto-regeneration here to prevent infinite recursion loop with updateShuffleOrder
+        if (!this.state.shuffledIndices) {
+            this.state.shuffledIndices = [];
         }
 
         this.render();
@@ -270,7 +303,95 @@ class App {
         this.saveData();
         this.renderFolderSelector();
         if (this.state.mode === 'edit') this.renderEditMode();
-        alert(`フォルダ「${trimmed}」を作成しました。`);
+        this.showToast(`フォルダ「${trimmed}」を作成しました`);
+    }
+
+    renameFolder() {
+        const current = this.state.currentFolder;
+        if (!current || current === 'All' || current === 'メイン') {
+            this.showToast("このフォルダは名前変更できません");
+            return;
+        }
+
+        const newName = prompt(`フォルダ「${current}」の新しい名前を入力してください:`, current);
+        if (!newName) return;
+        const trimmed = newName.trim();
+        if (!trimmed || trimmed === current) return;
+
+        if (this.state.folders.includes(trimmed)) {
+            alert("そのフォルダ名は既に使用されています。");
+            return;
+        }
+
+        // Update folders list
+        const index = this.state.folders.indexOf(current);
+        if (index !== -1) {
+            this.state.folders[index] = trimmed;
+            this.state.folders.sort();
+        }
+
+        // Update cards
+        this.state.cards.forEach(c => {
+            if (c.folder === current) {
+                c.folder = trimmed;
+            }
+        });
+
+        // Update locked list if present
+        if (this.state.lockedFolders.includes(current)) {
+            this.state.lockedFolders = this.state.lockedFolders.filter(f => f !== current);
+            this.state.lockedFolders.push(trimmed);
+        }
+
+        this.state.currentFolder = trimmed;
+        this.saveData();
+        this.renderFolderSelector();
+        this.renderEditMode();
+        this.showToast(`フォルダ名を「${trimmed}」に変更しました`);
+    }
+
+    toggleFolderLock() {
+        const current = this.state.currentFolder;
+        if (!current || current === 'All' || current === 'メイン') {
+            this.showToast("このフォルダのロック状態は変更できません");
+            return;
+        }
+
+        if (this.state.lockedFolders.includes(current)) {
+            // Unlock
+            this.state.lockedFolders = this.state.lockedFolders.filter(f => f !== current);
+            this.showToast(`フォルダ「${current}」のロックを解除しました`);
+        } else {
+            // Lock
+            this.state.lockedFolders.push(current);
+            this.showToast(`フォルダ「${current}」をロックしました`);
+        }
+
+        this.saveData();
+        this.renderEditMode(); // Re-render to update buttons
+    }
+
+    handleFolderChange(folderName) {
+        this.state.currentFolder = folderName;
+        // Blur to return focus to body for keyboard shortcuts
+        const s1 = document.getElementById('folder-select');
+        if (s1) s1.blur();
+        const s2 = document.getElementById('edit-folder-select');
+        if (s2) s2.blur();
+
+        if (this.state.mode === 'study') {
+            // Re-shuffle with new filter
+            this.updateShuffleOrder();
+            this.state.currentIndex = 0;
+            this.state.isFlipped = false;
+            this.renderStudyMode();
+        } else {
+            this.renderEditMode();
+        }
+    }
+
+    rateCard(quality) {
+        this.answerCard(quality);
     }
 
     updateShuffleOrder(filterFn = null) {
@@ -279,7 +400,20 @@ class App {
 
         // Filter by Folder
         if (this.state.currentFolder && this.state.currentFolder !== 'All') {
-            targetCards = targetCards.filter(c => c.folder === this.state.currentFolder);
+            const folderCards = targetCards.filter(c => c.folder === this.state.currentFolder);
+            if (folderCards.length === 0 && targetCards.length > 0) {
+                if (this.state.mode === 'edit') {
+                    // Allow empty folder in edit mode
+                    targetCards = [];
+                } else {
+                    console.warn("Folder is empty, switching to All");
+                    alert(`フォルダ「${this.state.currentFolder}」にはカードがありません。全てのフォルダを表示します。`);
+                    this.state.currentFolder = 'All';
+                    // targetCards remains as all cards
+                }
+            } else {
+                targetCards = folderCards;
+            }
         }
         if (filterFn) {
             targetCards = targetCards.filter(filterFn);
@@ -496,7 +630,7 @@ class App {
     toggleShuffle() {
         this.updateShuffleOrder();
         this.render();
-        alert('カードをシャッフルしました！');
+        this.showToast('カードをシャッフルしました');
     }
 
     // --- Modal & Form Handling ---
@@ -513,6 +647,10 @@ class App {
             submitBtn.textContent = '追加';
             submitBtn.classList.remove('btn-warning');
             this.resetForm();
+            // Pre-fill folder if selected
+            if (this.state.currentFolder && this.state.currentFolder !== 'All') {
+                document.getElementById('input-folder').value = this.state.currentFolder;
+            }
             this.state.editingId = null;
         } else if (mode === 'edit' && id) {
             title.textContent = '問題を編集';
@@ -568,7 +706,7 @@ class App {
             try {
                 imageData = await this.resizeImage(imageInput.files[0]);
             } catch (e) {
-                alert('画像の処理に失敗しました。');
+                this.showToast('画像の処理に失敗しました。');
                 return;
             }
         }
@@ -593,7 +731,7 @@ class App {
         this.state.shuffledIndices.push(this.state.cards.length - 1);
 
         this.saveData();
-        alert('問題を追加しました。次の問題として表示されます(または列の最後に追加されました)。');
+        this.showToast('問題を追加しました。次の問題として表示されます(または列の最後に追加されました)。');
     }
 
     async updateCard(qInput, aInput, imageInput, tagsInput, folderInput) {
@@ -615,7 +753,7 @@ class App {
         }
 
         this.saveData();
-        alert('問題を更新しました。');
+        this.showToast('問題を更新しました。');
 
         // If we are currently studying this card, re-render to show changes
         if (this.currentCard && this.currentCard.id === this.state.editingId) {
@@ -666,16 +804,219 @@ class App {
         if (confirm('本当にこの問題を削除しますか？')) {
             this.state.cards = this.state.cards.filter(c => c.id !== id);
             this.saveData();
+            this.showToast("問題を削除しました");
+            // If in edit mode, re-render
+            if (this.state.mode === 'edit') this.renderEditMode();
+        }
+    }
+
+    duplicateCard(id) {
+        const original = this.state.cards.find(c => c.id === id);
+        if (!original) return;
+
+        const newCard = {
+            ...original,
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+            srs: { interval: 0, reps: 0, ef: 2.5, nextReview: Date.now() } // Reset SRS
+        };
+
+        // Open modal with this new card data (but treated as 'add' effectively, or pre-filled edit)
+        // Better flow: Add to state, then open edit modal
+        this.state.cards.push(newCard);
+        this.saveData();
+        this.showToast("問題を複製しました");
+
+        // Open edit modal for the new card
+        this.openModal('edit', newCard.id);
+        if (this.state.mode === 'edit') this.renderEditMode();
+    }
+
+    deleteSelectedCards() {
+        const count = this.state.selectedCards ? this.state.selectedCards.length : 0;
+        if (count === 0) return;
+
+        if (confirm(`${count}件の問題を本当に削除しますか？`)) {
+            this.state.cards = this.state.cards.filter(c => !this.state.selectedCards.includes(c.id));
+            this.state.selectedCards = [];
+            this.saveData();
+            this.renderEditMode();
+            this.renderBulkActionBar();
+            this.showToast(`${count}件の問題を削除しました`);
+        }
+    }
+
+
+    // --- Toast Notification ---
+    showToast(message) {
+        const container = document.getElementById('toast-container');
+        if (!container) return; // Guard if element missing
+
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = message;
+
+        container.appendChild(toast);
+
+        // Trigger generic animation
+        requestAnimationFrame(() => {
+            toast.classList.add('show');
+        });
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => {
+                if (container.contains(toast)) {
+                    container.removeChild(toast);
+                }
+            }, 300); // Wait for transition
+        }, 3000);
+    }
+
+    // --- Folder Management ---
+
+    initiateDeleteFolder() {
+        const folder = this.state.currentFolder;
+        if (!folder || folder === 'All' || folder === 'メイン') {
+            this.showToast("「メイン」フォルダや「すべて」は削除できません。");
+            return;
+        }
+
+        const modal = document.getElementById('delete-folder-modal');
+        const msg = document.getElementById('delete-modal-msg');
+        const optionsDiv = document.getElementById('delete-options');
+        const moveSelect = document.getElementById('move-dest-folder');
+        const radios = document.getElementsByName('delete-action');
+
+        // Check content
+        const cardsInFolder = this.state.cards.filter(c => c.folder === folder);
+
+        document.getElementById('delete-modal-title').textContent = `フォルダ「${folder}」を削除`;
+
+        if (cardsInFolder.length > 0) {
+            msg.textContent = `このフォルダには ${cardsInFolder.length} 件の問題が含まれています。`;
+            optionsDiv.classList.remove('hidden');
+
+            // Populate move options (exclude current)
+            moveSelect.innerHTML = '';
+            // Always offer 'メイン'
+            const targetFolders = this.state.folders.filter(f => f !== folder).sort();
+            if (!targetFolders.includes('メイン')) targetFolders.unshift('メイン');
+
+            targetFolders.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f;
+                opt.textContent = f;
+                moveSelect.appendChild(opt);
+            });
+
+            // Reset interaction
+            radios[0].checked = true; // Default delete
+            moveSelect.disabled = true;
+
+            // Radio change handler
+            radios.forEach(radio => {
+                radio.onchange = (e) => {
+                    moveSelect.disabled = (e.target.value !== 'move');
+                };
+            });
+
+        } else {
+            msg.textContent = "このフォルダは空です。削除しますか？";
+            optionsDiv.classList.add('hidden');
+        }
+
+        modal.classList.remove('hidden');
+    }
+
+    confirmDeleteFolder() {
+        const folder = this.state.currentFolder;
+        const modal = document.getElementById('delete-folder-modal');
+        const optionsDiv = document.getElementById('delete-options');
+
+        // If hidden options, it's empty folder delete
+        if (optionsDiv.classList.contains('hidden')) {
+            this.deleteFolderData(folder, 'delete');
+        } else {
+            const action = document.querySelector('input[name="delete-action"]:checked').value;
+            const dest = document.getElementById('move-dest-folder').value;
+            this.deleteFolderData(folder, action, dest);
+        }
+
+        modal.classList.add('hidden');
+    }
+
+    deleteFolderData(folderName, action, destFolder = null) {
+        if (action === 'move' && destFolder) {
+            // Move cards
+            this.state.cards.forEach(c => {
+                if (c.folder === folderName) {
+                    c.folder = destFolder;
+                }
+            });
+            this.showToast(`カードを「${destFolder}」へ移動し、フォルダを削除しました`);
+        } else {
+            // Delete cards
+            const beforeCount = this.state.cards.length;
+            this.state.cards = this.state.cards.filter(c => c.folder !== folderName);
+            const deletedStats = beforeCount - this.state.cards.length;
+
+            if (deletedStats > 0) {
+                this.showToast(`フォルダと ${deletedStats} 件の問題を削除しました`);
+            } else {
+                this.showToast(`フォルダ「${folderName}」を削除しました`);
+            }
+        }
+
+        // Remove folder
+        this.state.folders = this.state.folders.filter(f => f !== folderName);
+
+        // Reset view
+        this.state.currentFolder = 'All'; // or 'メイン'
+
+        // Initial Render
+        this.renderFolderSelector();
+        this.renderStudyMode();
+    }
+
+    handleKeywords(e) {
+        // Ignore if typing in input/textarea
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+
+        if (this.state.mode === 'study') {
+            if (e.code === 'Space' || e.code === 'Enter') {
+                e.preventDefault(); // Prevent scrolling
+                if (!this.state.isFlipped) {
+                    this.flipCard();
+                }
+            }
+            if (this.state.isFlipped) {
+                if (e.key === '1') this.rateCard(1);
+                if (e.key === '2') this.rateCard(2);
+                if (e.key === '3') this.rateCard(3);
+                if (e.key === '4') this.rateCard(4);
+            }
+            if (e.key === 'e' || e.key === 'E') {
+                this.setMode('edit');
+            }
+        } else if (this.state.mode === 'edit') {
+            if (e.key === 's' || e.key === 'S') {
+                this.setMode('study');
+            }
+        } else if (this.state.mode === 'dashboard') {
+            if (e.key === 's' || e.key === 'S') {
+                this.setMode('study');
+            }
         }
     }
 
     // --- CSV Import/Export ---
 
     exportCSV() {
-        const headers = ['Question', 'Answer', 'Status', 'Tags'];
+        const headers = ['Question', 'Answer', 'Folder', 'Status', 'Tags'];
         const rows = this.state.cards.map(c => [
             `"${c.question.replace(/"/g, '""')}"`,
             `"${c.answer.replace(/"/g, '""')}"`,
+            `"${(c.folder || 'メイン').replace(/"/g, '""')}"`,
             c.status,
             `"${(c.tags || []).join(',')}"`
         ]);
@@ -704,20 +1045,62 @@ class App {
                 const text = e.target.result;
                 const rows = text.split('\n').map(row => row.trim()).filter(row => row);
 
+                // Check header to determine format
+                const header = rows[0].toLowerCase();
+                const hasFolder = header.includes('folder');
+
                 // Skip header if present
-                const startIndex = rows[0].toLowerCase().includes('question') ? 1 : 0;
+                const startIndex = header.includes('question') ? 1 : 0;
+
+                // Ask for Replace or Append
+                let replaceMode = false;
+                if (this.state.cards.length > 0) {
+                    replaceMode = confirm("既存のカードを全て削除して、CSVの内容に置き換えますか？\n（[キャンセル] を押すと追加モードになります）");
+                }
+
+                if (replaceMode) {
+                    this.state.cards = [];
+                    // Keep folders? Ideally reset folders too, but keep "All"/"Main" logic safe
+                    this.state.folders = ['メイン'];
+                    this.state.shuffledIndices = [];
+                }
 
                 let addedCount = 0;
                 for (let i = startIndex; i < rows.length; i++) {
                     // Simple CSV parser (handles quoted commas)
                     const cols = this.parseCSVRow(rows[i]);
+
+                    // Format 1 (New): Question, Answer, Folder, Status, Tags
+                    // Format 2 (Old): Question, Answer, Status, Tags
+
                     if (cols.length >= 2) {
+                        let folder = 'メイン';
+                        let status = 'unknown';
+                        let tags = [];
+
+                        if (hasFolder) {
+                            // New format: Q, A, Folder, Status, Tags
+                            folder = cols[2] ? cols[2].trim() : 'メイン';
+                            status = cols[3] || 'unknown';
+                            tags = cols[4] ? cols[4].split(',').map(t => t.trim()) : [];
+                        } else {
+                            // Old format: Q, A, Status, Tags
+                            status = cols[2] || 'unknown';
+                            tags = cols[3] ? cols[3].split(',').map(t => t.trim()) : [];
+                        }
+
+                        // Register folder if new
+                        if (folder && !this.state.folders.includes(folder)) {
+                            this.state.folders.push(folder);
+                        }
+
                         const newCard = {
                             id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
                             question: cols[0],
                             answer: cols[1],
-                            status: cols[2] || 'unknown',
-                            tags: cols[3] ? cols[3].split(',').map(t => t.trim()) : [],
+                            folder: folder,
+                            status: status,
+                            tags: tags,
                             image: null,
                             srs: { interval: 0, reps: 0, ef: 2.5, nextReview: Date.now() } // Ensure SRS init
                         };
@@ -726,12 +1109,19 @@ class App {
                     }
                 }
 
+                // Sort Folders
+                this.state.folders.sort();
+
                 // Add to shuffle order
-                // This is a bit heavy, maybe just re-shuffle all
                 this.updateShuffleOrder();
 
                 this.saveData();
-                alert(`${addedCount}件の問題をインポートしました。`);
+                this.renderFolderSelector();
+                this.renderEditMode(); // Refresh edit view
+
+                const modeMsg = replaceMode ? "全データを置き換え" : "追加";
+                alert(`${addedCount}件の問題をインポートしました（${modeMsg}）。`);
+
                 // Reset input
                 input.value = '';
             } catch (err) {
@@ -1049,6 +1439,32 @@ class App {
         }, 1500);
     }
 
+    // --- Theme ---
+    initTheme() {
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark-mode');
+        } else {
+            document.body.classList.remove('dark-mode');
+        }
+        this.updateThemeIcon();
+    }
+
+    toggleTheme() {
+        document.body.classList.toggle('dark-mode');
+        const isDark = document.body.classList.contains('dark-mode');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        this.updateThemeIcon();
+    }
+
+    updateThemeIcon() {
+        const btn = document.getElementById('theme-toggle');
+        if (!btn) return;
+        const isDark = document.body.classList.contains('dark-mode');
+        btn.innerHTML = isDark ? '<i data-lucide="sun"></i>' : '<i data-lucide="moon"></i>';
+        if (window.lucide) lucide.createIcons();
+    }
+
     showQuizResult() {
         document.getElementById('quiz-question-container').classList.add('hidden');
         document.getElementById('quiz-result').classList.remove('hidden');
@@ -1131,7 +1547,7 @@ class App {
 
         // Update Select (Study View)
         if (folderSelect) {
-            let html = '<option value="All">すべて</option>';
+            let html = '<option value="All">すべてのフォルダ</option>';
             sortedFolders.forEach(f => {
                 const selected = (f === this.state.currentFolder) ? 'selected' : '';
                 html += `<option value="${f}" ${selected}>${f}</option>`;
@@ -1139,6 +1555,25 @@ class App {
             folderSelect.innerHTML = html;
             // Ensure value is set correctly even if innerHTML didn't catch it
             folderSelect.value = this.state.currentFolder || 'All';
+        }
+
+        // Update Select (Edit View) - NEW
+        const editFolderSelect = document.getElementById('edit-folder-select');
+        if (editFolderSelect) {
+            let html = '<option value="All">すべてのフォルダ</option>';
+            sortedFolders.forEach(f => {
+                const selected = (f === this.state.currentFolder) ? 'selected' : '';
+                html += `<option value="${f}" ${selected}>${f}</option>`;
+            });
+            editFolderSelect.innerHTML = html;
+            editFolderSelect.value = this.state.currentFolder || 'All';
+        }
+
+        // Add/Update Delete Button Logic
+        const deleteFolderBtn = document.getElementById('btn-delete-folder');
+        if (deleteFolderBtn) {
+            const isDeletable = (this.state.currentFolder && this.state.currentFolder !== 'All' && this.state.currentFolder !== 'メイン');
+            deleteFolderBtn.style.display = isDeletable ? 'inline-block' : 'none';
         }
 
         // Update Datalist (Edit Form)
@@ -1248,35 +1683,57 @@ class App {
         const listContainer = document.getElementById('card-list-container');
         const countEl = document.getElementById('list-count');
 
+        const current = this.state.currentFolder;
+        const isSystemFolder = (!current || current === 'All' || current === 'メイン');
+        const isLocked = this.state.lockedFolders && this.state.lockedFolders.includes(current);
+
+        // Update Delete Button Logic
+        const deleteFolderBtn = document.getElementById('btn-delete-folder');
+        if (deleteFolderBtn) {
+            // Show if NOT system folder AND NOT locked
+            const isDeletable = !isSystemFolder && !isLocked;
+            deleteFolderBtn.style.display = isDeletable ? 'inline-flex' : 'none';
+        }
+
+        // Update Rename Button Logic
+        const renameFolderBtn = document.getElementById('btn-rename-folder');
+        if (renameFolderBtn) {
+            renameFolderBtn.style.display = !isSystemFolder ? 'inline-flex' : 'none';
+        }
+
+        // Update Lock Button Logic
+        const lockFolderBtn = document.getElementById('btn-lock-folder');
+        if (lockFolderBtn) {
+            if (isSystemFolder) {
+                lockFolderBtn.style.display = 'none';
+            } else {
+                lockFolderBtn.style.display = 'inline-flex';
+                // Update icon/state
+                const isLockedState = isLocked;
+                const icon = isLockedState ? 'lock' : 'unlock';
+                lockFolderBtn.innerHTML = `<i data-lucide="${icon}"></i>`;
+
+                // Style updates
+                if (isLockedState) {
+                    lockFolderBtn.classList.add('warning');
+                    lockFolderBtn.title = "ロック中 (解除するにはクリック)";
+                } else {
+                    lockFolderBtn.classList.remove('warning');
+                    lockFolderBtn.title = "フォルダをロック";
+                }
+            }
+            if (window.lucide) lucide.createIcons();
+        }
+
         // Filter Logic
         const keyword = (document.getElementById('search-input').value || '').toLowerCase();
-        const tagFilter = document.getElementById('tag-filter').value;
-
-        // Collect all unique tags for filter dropdown
-        const allTags = new Set();
-        this.state.cards.forEach(c => {
-            if (c.tags) c.tags.forEach(t => allTags.add(t));
-        });
-
-        // Update Tag Filter Options (preserve selection)
-        const tagSelect = document.getElementById('tag-filter');
-        const currentSelection = tagSelect.value;
-        tagSelect.innerHTML = '<option value="">全てのタグ</option>';
-        allTags.forEach(tag => {
-            const option = document.createElement('option');
-            option.value = tag;
-            option.textContent = tag;
-            if (tag === currentSelection) option.selected = true;
-            tagSelect.appendChild(option);
-        });
 
         // Filter cards
         const filteredCards = this.state.cards.filter(card => {
             const matchesKeyword = (card.question.toLowerCase().includes(keyword) || card.answer.toLowerCase().includes(keyword));
-            const matchesTag = tagFilter ? (card.tags && card.tags.includes(tagFilter)) : true;
             const matchesFolder = (this.state.currentFolder && this.state.currentFolder !== 'All')
                 ? (card.folder === this.state.currentFolder) : true;
-            return matchesKeyword && matchesTag && matchesFolder;
+            return matchesKeyword && matchesFolder;
         });
 
         countEl.textContent = filteredCards.length;
@@ -1286,45 +1743,47 @@ class App {
         filteredCards.forEach(card => {
             const div = document.createElement('div');
             div.className = 'list-item';
-
-            // Checkbox for bulk action
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.className = 'select-card-checkbox';
-            checkbox.value = card.id;
-            checkbox.style.marginRight = '10px';
-            if (this.state.selectedCards && this.state.selectedCards.includes(card.id)) {
-                checkbox.checked = true;
-            }
-            checkbox.onchange = (e) => this.toggleSelectCard(card.id, e.target.checked);
-            div.appendChild(checkbox);
+            div.style.display = 'flex';
+            div.style.alignItems = 'center';
 
             let imgHtml = '';
             if (card.image) {
                 imgHtml = `<img src="${card.image}" style="height: 40px; margin-right: 10px; border-radius: 4px;">`;
             }
 
-            let tagsHtml = '';
-            if (card.tags && card.tags.length > 0) {
-                tagsHtml = `<div style="margin-top: 4px;">${card.tags.map(t => `<span class="tag-badge">#${t}</span>`).join('')}</div>`;
-            }
-
+            // Content
             div.innerHTML = `
-        <div class="list-content" style="display: flex; align-items: center;">
+        <div class="list-content" style="flex: 1; display: flex; align-items: center; overflow: hidden;">
           ${imgHtml}
-          <div>
-            <div class="list-q">Q: ${this.escapeHtml(card.question)}</div>
+          <div style="overflow: hidden; text-overflow: ellipsis;">
+            <div class="list-q" style="font-weight: bold;">Q: ${this.escapeHtml(card.question)}</div>
             <div class="list-a">A: ${this.escapeHtml(card.answer)}</div>
-            ${tagsHtml}
           </div>
         </div>
-        <div class="list-actions">
-          <button class="btn-sm" onclick="app.openModal('edit', '${card.id}')" style="margin-right: 5px;">編集</button>
+        <div class="list-actions" style="display: flex; gap: 4px; margin-left: 10px;">
+          <button class="btn-sm" onclick="app.openModal('edit', '${card.id}')">編集</button>
+          <button class="btn-sm" onclick="app.duplicateCard('${card.id}')" title="複製"><i data-lucide="copy" style="width: 14px; height: 14px;"></i></button>
           <button class="btn-sm btn-danger" onclick="app.deleteCard('${card.id}')">削除</button>
         </div>
       `;
+
+            // Checkbox - Prepend
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'select-card-checkbox';
+            checkbox.value = card.id;
+            checkbox.style.marginRight = '10px';
+            checkbox.style.cursor = 'pointer';
+            if (this.state.selectedCards && this.state.selectedCards.includes(card.id)) {
+                checkbox.checked = true;
+            }
+            checkbox.onchange = (e) => this.toggleSelectCard(card.id, e.target.checked);
+
+            div.prepend(checkbox);
             listContainer.appendChild(div);
         });
+
+        if (window.lucide) lucide.createIcons();
     }
 
     renderDashboardMode() {
@@ -1391,7 +1850,7 @@ class App {
 
 // Start App
 try {
-    new App();
+    window.app = new App();
 } catch (e) {
     console.error("App Init Failed:", e);
     alert("アプリの起動に失敗しました: " + e.message);

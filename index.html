@@ -15,34 +15,25 @@
 
 <body>
     <!-- Top Navigation -->
-    <nav class="bottom-nav">
-        <button class="nav-item active" id="nav-study" onclick="app.setMode('study')">
-            <i data-lucide="book-open"></i>
-            <span>学習</span>
-            <span id="streak-badge" class="badge hidden">🔥 0</span>
-        </button>
-        <button class="nav-item" id="nav-dashboard" onclick="app.setMode('dashboard')">
-            <i data-lucide="bar-chart-2"></i>
-            <span>データ</span>
-        </button>
-        <button class="nav-item" id="nav-quiz" onclick="app.setMode('quiz')">
-            <i data-lucide="check-circle"></i>
-            <span>テスト</span>
-        </button>
-        <button class="nav-item" id="nav-edit" onclick="app.setMode('edit')">
-            <i data-lucide="edit-3"></i>
-            <span>編集</span>
-        </button>
+    <nav class="top-nav">
+        <div class="logo" style="display: flex; align-items: center; gap: 0.5rem; color: var(--primary-color);">
+            <i data-lucide="brain-circuit"></i>
+            <span style="font-weight: 800; font-size: 1.25rem;">SkillCheck</span>
+        </div>
+
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <button id="theme-toggle" class="btn-icon" title="テーマ切り替え (Dark/Light)" onclick="app.toggleTheme()">
+                <i data-lucide="moon"></i>
+            </button>
+            <div class="nav-links" style="display: flex; gap: 0.5rem;">
+                <button id="nav-study" class="nav-item active" onclick="app.setMode('study')">学習</button>
+                <button id="nav-edit" class="nav-item" onclick="app.setMode('edit')">編集</button>
+                <button id="nav-dashboard" class="nav-item" onclick="app.setMode('dashboard')">データ</button>
+            </div>
+        </div>
     </nav>
 
-    <header class="app-header" style="display: none;">
-        <h1>技能照査ドリル</h1>
-        <button class="btn btn-sm" id="pwa-install-btn" style="display: none;">
-            インストール
-        </button>
-    </header>
-
-    <main>
+    <main style="flex: 1; overflow-y: auto; padding: 1rem; position: relative;">
         <!-- Study Mode -->
         <div id="study-view" class="study-container">
             <div class="folder-select-container" style="margin-bottom: 10px; text-align: center;">
@@ -99,7 +90,7 @@
 
         <!-- Edit View -->
         <div id="edit-view" class="view hidden">
-            <div class="header-actions"
+            <div class="header-actions edit-header-container"
                 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <h2>問題リスト (<span id="list-count">0</span>)</h2>
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
@@ -158,32 +149,51 @@
             </div>
 
             <!-- Search & Filter -->
-            <div class="search-container" style="margin-bottom: 1rem;">
-                <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <div class="search-container" style="flex-wrap: wrap; row-gap: 1rem; align-items: center;">
+                <div class="folder-toolbar" style="flex: 2; min-width: 300px; gap: 0.5rem;">
                     <select id="edit-folder-select" onchange="app.handleFolderChange(this.value)"
-                        style="padding: 8px; border-radius: 4px; border: 1px solid #ddd; flex: 1;">
+                        style="padding: 0.5rem; border-radius: 8px; border: 1px solid #cbd5e1; flex-grow: 1; min-width: 150px;">
                         <option value="All">すべてのフォルダ</option>
                     </select>
-                    <button class="btn" style="padding: 8px;" onclick="app.createFolder()">
-                        <i data-lucide="folder-plus"></i>
+
+                    <div class="btn-group">
+                        <button id="btn-lock-folder" class="btn-icon" title="フォルダをロック" onclick="app.toggleFolderLock()">
+                            <i data-lucide="unlock"></i>
+                        </button>
+                        <button id="btn-rename-folder" class="btn-icon" title="名前変更" onclick="app.renameFolder()">
+                            <i data-lucide="pencil"></i>
+                        </button>
+                        <button id="btn-delete-folder" class="btn-icon delete" title="フォルダ削除"
+                            onclick="app.initiateDeleteFolder()">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                    </div>
+
+                    <button class="btn btn-sm" onclick="app.createFolder()" title="新規フォルダ作成"
+                        style="white-space: nowrap;">
+                        <i data-lucide="folder-plus"></i> <span style="margin-left: 4px;">作成</span>
                     </button>
                 </div>
-                <input type="text" id="search-input" placeholder="検索 (キーワード)..." oninput="app.renderEditMode()">
-                <select id="tag-filter" onchange="app.renderEditMode()">
-                    <option value="">全てのタグ</option>
-                </select>
+
+                <div style="flex: 1; display: flex; gap: 0.5rem; min-width: 300px;">
+                    <input type="text" id="search-input" placeholder="検索 (キーワード)..." oninput="app.renderEditMode()"
+                        style="padding: 0.5rem; border-radius: 8px; border: 1px solid #cbd5e1; flex: 1;">
+                </div>
             </div>
 
             <!-- Bulk Action Bar -->
             <div id="bulk-action-bar" class="hidden"
-                style="background: #f0f9ff; padding: 10px; margin-bottom: 1rem; border-radius: 8px; border: 1px solid #bae6fd; display: flex; align-items: center; gap: 10px;">
-                <span style="font-weight: bold; color: #0284c7;"><span id="bulk-selected-count">0</span> 件選択中</span>
-                <select id="bulk-folder-select"
-                    style="padding: 5px; border-radius: 4px; border: 1px solid #ccc; flex: 1;">
-                    <!-- Populated by script -->
-                </select>
-                <button class="btn btn-sm" onclick="app.moveSelectedCards()"
-                    style="background: #0284c7; color: white; padding: 5px 10px;">移動</button>
+                style="background: #f0f9ff; padding: 0.75rem; margin-bottom: 1rem; border-radius: 8px; border: 1px solid #bae6fd; display: flex; align-items: center; justify-content: space-between;">
+                <span style="margin-right: 1rem; font-weight: bold; color: #0369a1;"><span
+                        id="bulk-selected-count">0</span>件を選択中</span>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <select id="bulk-folder-select"
+                        style="padding: 0.4rem; border-radius: 6px; border: 1px solid #cbd5e1; min-width: 150px;">
+                        <!-- Populated by JS -->
+                    </select>
+                    <button class="btn btn-sm" onclick="app.moveSelectedCards()">移動</button>
+                    <button class="btn btn-sm btn-danger" onclick="app.deleteSelectedCards()">削除</button>
+                </div>
             </div>
 
             <!-- List Container -->
@@ -252,12 +262,43 @@
         </div>
     </main>
 
-    <!-- Top Navigation -->
-    <!-- Moved nav to body top, updating here just in case I missed the location in previous edits -->
-    <!-- Assuming nav is already at top based on previous steps -->
+    <!-- Delete Folder Modal -->
+    <div id="delete-folder-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 id="delete-modal-title">フォルダを削除</h3>
+            <p id="delete-modal-msg">このフォルダを削除しますか？</p>
 
-    <script src="data.js"></script>
-    <script src="script.js"></script>
+            <div id="delete-options" class="hidden">
+                <div class="form-group">
+                    <label>
+                        <input type="radio" name="delete-action" value="delete" checked>
+                        フォルダ内の問題も全て削除する
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="radio" name="delete-action" value="move">
+                        別のフォルダへ移動する
+                    </label>
+                    <select id="move-dest-folder" class="form-control" style="width: 100%; margin-top: 5px;" disabled>
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+            </div>
+
+            <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem;">
+                <button class="btn"
+                    onclick="document.getElementById('delete-folder-modal').classList.add('hidden')">キャンセル</button>
+                <button class="btn btn-danger" onclick="app.confirmDeleteFolder()">削除を実行</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <script src="data.js?v=3"></script>
+    <script src="script.js?v=3"></script>
     <script>
         lucide.createIcons();
 

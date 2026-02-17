@@ -1,4 +1,4 @@
-const CACHE_NAME = 'skill-test-app-v3';
+const CACHE_NAME = 'skill-test-app-v6';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -11,6 +11,7 @@ const ASSETS_TO_CACHE = [
 
 // Install Event: Cache assets
 self.addEventListener('install', (event) => {
+    self.skipWaiting(); // Force activation immediately
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
             console.log('Opened cache');

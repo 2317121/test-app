@@ -41,8 +41,10 @@ class App {
         console.log("App initializing...");
         try {
             this.initTheme(); // Initialize theme first
-            this.loadData();
+            this.loadData(); // Load data from localStorage or initialData
             console.log("Data loaded. Cards:", this.state.cards ? this.state.cards.length : "null");
+
+            // this.initFolderSelection(); // Set default folder logic - Removed as logic is handled in loadData/render
 
             if (!Array.isArray(this.state.cards)) {
                 console.error("Cards is not an array, resetting.");
@@ -130,32 +132,231 @@ class App {
     // --- Data Management ---
 
     render() {
-        // Toggle Views
-        ['study', 'edit', 'dashboard', 'quiz'].forEach(mode => {
-            const el = document.getElementById(`${mode}-view`);
-            if (el) el.classList.add('hidden');
+        // Update View Visibility
+        ['study', 'edit', 'dashboard', 'quiz'].forEach(m => {
+            const view = document.getElementById(`${m}-view`);
+            if (view) {
+                if (m === this.state.mode) {
+                    view.classList.remove('hidden');
+                } else {
+                    view.classList.add('hidden');
+                }
+            }
         });
 
-        const currentView = document.getElementById(`${this.state.mode}-view`);
-        if (currentView) currentView.classList.remove('hidden');
+        // Update Nav Active State
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        const navId = this.state.mode === 'quiz' ? 'nav-quiz' : `nav-${this.state.mode}`;
+        const activeNav = document.getElementById(navId);
+        if (activeNav) activeNav.classList.add('active');
 
-        // Render sub-components
+        // Mode specific render logic
         if (this.state.mode === 'study') {
-            this.renderStudyMode();
+            this.renderCard();
+            this.updateProgress();
         } else if (this.state.mode === 'edit') {
-            this.renderEditMode();
+            this.renderList();
         } else if (this.state.mode === 'dashboard') {
             this.renderDashboard();
         } else if (this.state.mode === 'quiz') {
-            if (!this.quizState) this.renderQuizStart();
+            // Initial render request or return to tab
+            if (!this.quizState) {
+                this.startQuiz();
+            }
+        }
+    }
+
+    // --- Quiz Logic ---
+
+    startQuiz() {
+        try {
+            console.log("Starting Quiz...");
+            // Filter cards based on current folder
+            let pool = this.filterCardsByFolder(this.state.folders.includes(this.state.currentFolder) ? this.state.currentFolder : 'All');
+
+            console.log("Pool size:", pool.length);
+
+            if (pool.length < 4) {
+                alert('クイズをするには、このフォルダに少なくとも4枚のカードが必要です。');
+                this.setMode('study'); // Go back
+                return;
+            }
+
+            // Shuffle pool
+            pool = this.getRandomSubarray(pool, pool.length); // Shuffle all
+
+            this.quizState = {
+                queue: pool,
+                currentIndex: 0,
+                correctCount: 0,
+                currentQuestion: null,
+                isAnswered: false
+            };
+
+            this.renderQuizQuestion();
+        } catch (e) {
+            console.error("Quiz Error:", e);
+            alert("クイズの開始中にエラーが発生しました: " + e.message);
+        }
+    }
+
+    renderQuizQuestion() {
+        try {
+            const qState = this.quizState;
+            if (!qState) {
+                console.error("No quiz state");
+                return;
+            }
+
+            if (qState.currentIndex >= qState.queue.length) {
+                // End of quiz
+                alert(`クイズ終了！\n正解数: ${qState.correctCount} / ${qState.queue.length}`);
+                this.quizState = null; // Reset
+                this.startQuiz(); // Restart
+                return;
+            }
+
+            const card = qState.queue[qState.currentIndex];
+            if (!card) {
+                alert("Error: Card is undefined at index " + qState.currentIndex);
+                return;
+            }
+
+            qState.currentQuestion = card;
+            qState.isAnswered = false;
+
+            // UI Updates
+            const indexEl = document.getElementById('quiz-index');
+            if (indexEl) indexEl.textContent = qState.currentIndex + 1;
+            const totalEl = document.getElementById('quiz-total');
+            if (totalEl) totalEl.textContent = qState.queue.length;
+
+            const questionEl = document.getElementById('quiz-question');
+            if (questionEl) {
+                questionEl.textContent = card.question;
+            } else {
+                alert("Error: quiz-question element not found!");
+            }
+
+            // Reset Feedback
+            const feedbackEl = document.getElementById('quiz-feedback');
+            if (feedbackEl) {
+                feedbackEl.classList.add('hidden');
+                feedbackEl.textContent = '';
+                feedbackEl.style.color = '';
+            }
+
+            const controlsEl = document.getElementById('quiz-controls');
+            if (controlsEl) controlsEl.classList.add('hidden');
+
+            const explEl = document.getElementById('quiz-explanation');
+            if (explEl) explEl.textContent = '';
+
+            // Generate Options
+            // 1 Correct + 3 Distractors
+            const distractors = this.getDistractors(card, qState.queue, 3);
+            const options = this.getRandomSubarray([card, ...distractors], 4);
+
+            const optionsContainer = document.getElementById('quiz-options');
+            if (optionsContainer) {
+                optionsContainer.innerHTML = '';
+                options.forEach(opt => {
+                    const btn = document.createElement('button');
+                    btn.className = 'btn btn-outline quiz-option';
+                    btn.style.textAlign = 'left';
+                    btn.style.padding = '1rem';
+                    btn.style.width = '100%';
+                    btn.textContent = opt.answer;
+                    btn.onclick = () => this.handleQuizSelection(opt, btn);
+                    optionsContainer.appendChild(btn);
+                });
+            } else {
+                alert("Error: quiz-options container not found!");
+            }
+        } catch (e) {
+            alert("Render Quiz Error: " + e.message);
+            console.error(e);
+        }
+    }
+
+    getDistractors(correctCard, pool, count) {
+        // Simple random selection from pool excluding correctCard
+        const candidates = pool.filter(c => c.id !== correctCard.id);
+        return this.getRandomSubarray(candidates, count);
+    }
+
+    getRandomSubarray(arr, size) {
+        var shuffled = arr.slice(0), i = arr.length, temp, index;
+        while (i--) {
+            index = Math.floor(Math.random() * (i + 1));
+            temp = shuffled[i];
+            shuffled[i] = shuffled[index];
+            shuffled[index] = temp;
+        }
+        return shuffled.slice(0, size);
+    }
+
+    handleQuizSelection(selectedCard, btnElement) {
+        if (this.quizState.isAnswered) return;
+        this.quizState.isAnswered = true;
+
+        const correctCard = this.quizState.currentQuestion;
+        const isCorrect = selectedCard.id === correctCard.id;
+
+        const feedbackEl = document.getElementById('quiz-feedback');
+        if (feedbackEl) {
+            feedbackEl.classList.remove('hidden');
+            if (isCorrect) {
+                this.quizState.correctCount++;
+                feedbackEl.textContent = '正解! 🙆‍♂️';
+                feedbackEl.style.color = '#10b981';
+            } else {
+                feedbackEl.textContent = '不正解... 🙅‍♂️';
+                feedbackEl.style.color = '#ef4444';
+            }
         }
 
-        // Update Nav
-        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-        const navId = `nav-${this.state.mode}`;
-        const navEl = document.getElementById(navId);
-        if (navEl) navEl.classList.add('active');
+        // Style all buttons
+        const allBtns = document.querySelectorAll('.quiz-option');
+        allBtns.forEach(btn => {
+            // Highlight correct answer
+            if (btn.textContent === correctCard.answer) {
+                btn.classList.remove('btn-outline');
+                btn.style.backgroundColor = '#d1fae5'; // Light green
+                btn.style.borderColor = '#10b981';
+                btn.style.color = '#065f46';
+            } else if (btn === btnElement && !isCorrect) {
+                // Highlight selected wrong answer
+                btn.classList.remove('btn-outline');
+                btn.style.backgroundColor = '#fee2e2'; // Light red
+                btn.style.borderColor = '#ef4444';
+                btn.style.color = '#991b1b';
+            }
+            btn.disabled = true;
+        });
+
+        // Show Explanation
+        const expEl = document.getElementById('quiz-explanation');
+        if (expEl) {
+            if (correctCard.explanation) {
+                expEl.textContent = correctCard.explanation;
+            } else {
+                expEl.textContent = '（解説はありません）';
+            }
+            expEl.classList.remove('hidden'); // Ensure it is visible if previously hidden? Actually logic marks the container
+        }
+
+        const controlsEl = document.getElementById('quiz-controls');
+        if (controlsEl) controlsEl.classList.remove('hidden');
     }
+
+    nextQuizQuestion() {
+        this.quizState.currentIndex++;
+        this.renderQuizQuestion();
+    }
+
+    // --- End Quiz Logic ---
+
 
     loadData() {
         try {
@@ -210,23 +411,55 @@ class App {
             this.state.isFlipped = false;
             this.state.editingId = null;
 
-            // Merge initialData if new questions are added
+            // Merge initialData with Priority on Source File for Content
             if (window.initialData) {
-                window.initialData.forEach(initCard => {
-                    // Check if card with this ID exists
-                    const exists = this.state.cards.some(c => c.id === initCard.id);
-                    if (!exists) {
-                        console.log("Adding new card from initialData:", initCard.id);
-                        // Initialize with default state
-                        const newCard = {
-                            ...initCard,
+                const masterIds = new Set(window.initialData.map(c => c.id));
+                const localMap = new Map(this.state.cards.map(c => [c.id, c]));
+                const newCards = [];
+
+                // 1. Process Master Data (data.js)
+                // This ensures all cards in data.js are present and content is up-to-date
+                window.initialData.forEach(masterCard => {
+                    const localCard = localMap.get(masterCard.id);
+                    if (localCard) {
+                        // Merge: Master content + Local progress
+                        newCards.push({
+                            ...masterCard, // Use master for Q, A, Explanation, Folder
+                            status: localCard.status || 'unknown',
+                            srs: localCard.srs || { interval: 0, reps: 0, ef: 2.5, nextReview: Date.now() },
+                            tags: localCard.tags || [],
+                            // Preserve image if master doesn't have one but local does? 
+                            // Usually master image is authoritative if set, otherwise keep local (user upload)
+                            image: masterCard.image || localCard.image
+                        });
+                    } else {
+                        // New card from Master
+                        newCards.push({
+                            ...masterCard,
                             status: 'unknown',
                             srs: { interval: 0, reps: 0, ef: 2.5, nextReview: Date.now() },
                             tags: []
-                        };
-                        this.state.cards.push(newCard);
+                        });
                     }
                 });
+
+                // 2. Process User Custom Data (Preserve cards created in-app)
+                this.state.cards.forEach(localCard => {
+                    if (!masterIds.has(localCard.id)) {
+                        // Card exists locally but not in data.js.
+                        // DECISION: Is it a user-created card or a deleted default card?
+                        // User cards usually have timestamp IDs (13 digits). Legacy/Default IDs are usually shorter.
+                        if (localCard.id.length >= 13 && /^\d+$/.test(localCard.id)) {
+                            // Likely a user-created card (timestamp) -> KEEP
+                            newCards.push(localCard);
+                        } else {
+                            // Likely a deleted default card -> DROP
+                            console.log("Removing orphaned card:", localCard.id, localCard.question);
+                        }
+                    }
+                });
+
+                this.state.cards = newCards;
             }
 
             // Fix Invalid Statuses
@@ -673,6 +906,7 @@ class App {
         document.getElementById('input-folder').value = '';
         document.getElementById('input-image').value = '';
         document.getElementById('input-tags').value = '';
+        document.getElementById('input-explanation').value = '';
     }
 
     loadCardToForm(id) {
@@ -682,6 +916,7 @@ class App {
         document.getElementById('input-answer').value = card.answer;
         document.getElementById('input-folder').value = card.folder || 'メイン';
         document.getElementById('input-tags').value = (card.tags || []).join(', ');
+        document.getElementById('input-explanation').value = card.explanation || '';
     }
 
     async handleFormSubmit(event) {
@@ -691,16 +926,17 @@ class App {
         const folderInput = document.getElementById('input-folder');
         const imageInput = document.getElementById('input-image');
         const tagsInput = document.getElementById('input-tags');
+        const explanationInput = document.getElementById('input-explanation');
 
         if (this.state.editingId) {
-            await this.updateCard(qInput, aInput, imageInput, tagsInput, folderInput);
+            await this.updateCard(qInput, aInput, imageInput, tagsInput, folderInput, explanationInput);
         } else {
-            await this.addCard(qInput, aInput, imageInput, tagsInput, folderInput);
+            await this.addCard(qInput, aInput, imageInput, tagsInput, folderInput, explanationInput);
         }
         this.closeModal();
     }
 
-    async addCard(qInput, aInput, imageInput, tagsInput, folderInput) {
+    async addCard(qInput, aInput, imageInput, tagsInput, folderInput, explanationInput) {
         let imageData = null;
         if (imageInput.files && imageInput.files[0]) {
             try {
@@ -713,6 +949,7 @@ class App {
 
         const tags = tagsInput.value.split(',').map(t => t.trim()).filter(t => t);
         const folder = (folderInput && folderInput.value.trim()) ? folderInput.value.trim() : 'メイン';
+        const explanation = explanationInput ? explanationInput.value : '';
 
         const newCard = {
             id: Date.now().toString(),
@@ -721,6 +958,7 @@ class App {
             folder: folder,
             image: imageData,
             tags: tags,
+            explanation: explanation,
             status: 'unknown',
             srs: { interval: 0, reps: 0, ef: 2.5, nextReview: Date.now() }
         };
@@ -734,7 +972,7 @@ class App {
         this.showToast('問題を追加しました。次の問題として表示されます(または列の最後に追加されました)。');
     }
 
-    async updateCard(qInput, aInput, imageInput, tagsInput, folderInput) {
+    async updateCard(qInput, aInput, imageInput, tagsInput, folderInput, explanationInput) {
         const cardIndex = this.state.cards.findIndex(c => c.id === this.state.editingId);
         if (cardIndex === -1) return;
 
@@ -743,6 +981,7 @@ class App {
         card.answer = aInput.value;
         card.folder = (folderInput && folderInput.value.trim()) ? folderInput.value.trim() : 'メイン';
         card.tags = tagsInput.value.split(',').map(t => t.trim()).filter(t => t);
+        card.explanation = explanationInput ? explanationInput.value : '';
 
         if (imageInput.files && imageInput.files[0]) {
             try {
@@ -927,6 +1166,26 @@ class App {
 
         modal.classList.remove('hidden');
     }
+
+    handleFolderChange(folderName) {
+        this.state.currentFolder = folderName;
+        this.state.currentIndex = 0; // Reset index
+        this.saveData(); // Save preference
+
+        if (this.state.mode === 'quiz') {
+            this.startQuiz();
+        } else {
+            this.renderStudyMode();
+        }
+    }
+
+    filterCardsByFolder(folderName) {
+        if (!folderName || folderName === 'All') {
+            return this.state.cards;
+        }
+        return this.state.cards.filter(card => card.folder === folderName);
+    }
+
 
     confirmDeleteFolder() {
         const folder = this.state.currentFolder;
@@ -1346,25 +1605,90 @@ class App {
     renderQuizStart() {
         document.getElementById('quiz-start').classList.remove('hidden');
         document.getElementById('quiz-question-container').classList.add('hidden');
+        document.getElementById('quiz-result').classList.add('hidden');
+
+        // Populate Folder Select
+        const folderSelect = document.getElementById('quiz-folder-select');
+        if (folderSelect) {
+            // Get unique folders
+            let folders = new Set(['メイン']);
+            if (this.state.folders && Array.isArray(this.state.folders)) {
+                this.state.folders.forEach(f => folders.add(f));
+            }
+            this.state.cards.forEach(c => {
+                if (c.folder) folders.add(c.folder);
+            });
+            const sortedFolders = Array.from(folders).sort();
+
+            let html = '<option value="All">すべてのフォルダ</option>';
+            // Pre-select current folder if valid
+            const preSelect = (this.state.currentFolder && this.state.currentFolder !== 'All') ? this.state.currentFolder : 'All';
+
+            sortedFolders.forEach(f => {
+                const selected = (f === preSelect) ? 'selected' : '';
+                html += `<option value="${f}" ${selected}>${f}</option>`;
+            });
+            folderSelect.innerHTML = html;
+        }
     }
 
-    startQuiz() {
-        if (this.state.cards.length < 4) {
-            alert('クイズをするには、少なくとも4つの問題が必要です。');
+    startQuiz(mode = 'normal') {
+        let pool = [];
+
+        // Get Quiz Type
+        const typeSelect = document.getElementById('quiz-type');
+        const quizType = typeSelect ? typeSelect.value : '4choice';
+
+        if (mode === 'review') {
+            if (!this.quizState || !this.quizState.wrongQuestions || this.quizState.wrongQuestions.length === 0) {
+                alert('復習する問題がありません。');
+                return;
+            }
+            pool = this.state.cards.filter(c => this.quizState.wrongQuestions.includes(c.id));
+        } else {
+            // Get selected folder from UI
+            const folderSelect = document.getElementById('quiz-folder-select');
+            let targetFolder = folderSelect ? folderSelect.value : 'All';
+
+            // Fallback: If UI missing or "All" selected, check if we should default to Secure?
+            // User wanted Secure 59 questions. 
+            // If user explicitly selects "All", we should show All.
+            // If user selects specific folder, show that.
+
+            // However, to keep the "default to Secure if available AND no specific selection made (or UI missing)" logic:
+            if (!folderSelect) {
+                const secure = this.state.folders.find(f => f.includes('セキュア'));
+                if (secure) targetFolder = secure;
+            }
+
+            pool = this.filterCardsByFolder(targetFolder);
+        }
+
+        if (pool.length < 1) {
+            alert('クイズをするには、少なくとも1つの問題が必要です。');
             return;
         }
 
-        // Select 10 random cards
-        const shuffled = [...this.state.cards].sort(() => Math.random() - 0.5);
+        // Shuffle
+        const shuffled = [...pool].sort(() => Math.random() - 0.5);
+
         this.quizState = {
-            questions: shuffled.slice(0, 10),
+            questions: shuffled, // Use ALL questions
             current: 0,
-            score: 0
+            score: 0,
+            wrongQuestions: [],
+            mode: mode,
+            type: quizType // Save type
         };
 
         document.getElementById('quiz-start').classList.add('hidden');
         document.getElementById('quiz-question-container').classList.remove('hidden');
+        document.getElementById('quiz-result').classList.add('hidden'); // Ensure result is hidden
         this.renderQuizQuestion();
+    }
+
+    startReviewQuiz() {
+        this.startQuiz('review');
     }
 
     renderQuizQuestion() {
@@ -1372,11 +1696,12 @@ class App {
         const total = this.quizState.questions.length;
 
         // Update Header
-        document.getElementById('quiz-progress').textContent = `${this.quizState.current + 1} / ${total}`;
+        document.getElementById('quiz-index').textContent = this.quizState.current + 1;
+        document.getElementById('quiz-total').textContent = total;
         document.getElementById('quiz-score').textContent = `Score: ${this.quizState.score}`;
 
         // Question
-        document.getElementById('quiz-question-text').textContent = q.question;
+        document.getElementById('quiz-question').textContent = q.question;
         const imgEl = document.getElementById('quiz-image');
         if (q.image) {
             imgEl.src = q.image;
@@ -1385,18 +1710,119 @@ class App {
             imgEl.classList.add('hidden');
         }
 
-        // Generate Choices
-        const choices = this.generateChoices(q);
-        const container = document.getElementById('quiz-choices');
+        // Reset Explanation & Next Button
+        document.getElementById('quiz-explanation-container').classList.add('hidden');
+        document.getElementById('quiz-options').style.pointerEvents = 'auto'; // Enable clicks
+        const container = document.getElementById('quiz-options');
         container.innerHTML = '';
 
-        choices.forEach(choice => {
-            const btn = document.createElement('button');
-            btn.className = 'btn-choice';
-            btn.textContent = choice;
-            btn.onclick = () => this.answerQuiz(btn, choice, q.answer);
-            container.appendChild(btn);
-        });
+        // Add Audio Button to Question
+        const qEl = document.getElementById('quiz-question');
+        // Create audio button
+        const audioBtn = document.createElement('button');
+        audioBtn.className = 'btn-icon'; // Need style?
+        audioBtn.style.marginLeft = '10px';
+        audioBtn.style.verticalAlign = 'middle';
+        audioBtn.style.cursor = 'pointer';
+        audioBtn.style.background = 'none';
+        audioBtn.style.border = 'none';
+        audioBtn.style.color = 'var(--primary-color)';
+        audioBtn.innerHTML = '<i data-lucide="volume-2"></i>';
+        audioBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.speakText(q.question);
+        };
+        qEl.appendChild(audioBtn);
+        if (window.lucide) lucide.createIcons();
+
+        // Branch by Quiz Type
+        if (this.quizState.type === 'input') {
+            // --- Input Type ---
+            const inputGroup = document.createElement('div');
+            inputGroup.style.display = 'flex';
+            inputGroup.style.gap = '10px';
+            inputGroup.style.flexDirection = 'column';
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.id = 'quiz-input-answer';
+            input.className = 'form-control'; // reuse style?
+            input.placeholder = '回答を入力...';
+            input.style.padding = '12px';
+            input.style.borderRadius = '8px';
+            input.style.border = '1px solid #ddd';
+            input.style.fontSize = '1.1rem';
+
+            const submitBtn = document.createElement('button');
+            submitBtn.textContent = '回答する';
+            submitBtn.className = 'btn btn-primary';
+            submitBtn.onclick = () => this.checkInputAnswer();
+
+            // Enter key support
+            input.onkeydown = (e) => {
+                if (e.key === 'Enter') this.checkInputAnswer();
+            };
+
+            inputGroup.appendChild(input);
+            inputGroup.appendChild(submitBtn);
+            container.appendChild(inputGroup);
+            input.focus();
+
+        } else {
+            // --- 4 Choice Type ---
+            const choices = this.generateChoices(q);
+            choices.forEach(choice => {
+                const btn = document.createElement('button');
+                btn.className = 'btn-choice';
+                btn.textContent = choice;
+                btn.onclick = () => this.answerQuiz(btn, choice, q.answer);
+                container.appendChild(btn);
+            });
+        }
+    }
+
+    checkInputAnswer() {
+        const input = document.getElementById('quiz-input-answer');
+        if (!input) return;
+        const userAnswer = input.value.trim();
+        if (!userAnswer) return;
+
+        const currentQ = this.quizState.questions[this.quizState.current];
+        const isCorrect = (userAnswer.toLowerCase() === currentQ.answer.toLowerCase()); // Simple check
+
+        const container = document.getElementById('quiz-options');
+        container.innerHTML = '';
+
+        const resultDiv = document.createElement('div');
+        resultDiv.style.textAlign = 'center';
+        resultDiv.style.padding = '1rem';
+        resultDiv.style.fontSize = '1.2rem';
+        resultDiv.style.fontWeight = 'bold';
+
+        if (isCorrect) {
+            resultDiv.textContent = '正解！😄';
+            resultDiv.style.color = '#10b981'; // green
+            this.quizState.score++;
+            this.rateCard(5);
+        } else {
+            resultDiv.innerHTML = `不正解... 😢<br><span style="font-size: 1rem; color: var(--text-color);">正解: ${this.escapeHtml(currentQ.answer)}</span>`;
+            resultDiv.style.color = '#ef4444'; // red
+            this.quizState.wrongQuestions.push(currentQ.id);
+            this.rateCard(1);
+        }
+        container.appendChild(resultDiv);
+        document.getElementById('quiz-score').textContent = `Score: ${this.quizState.score}`;
+
+        // Show Explanation
+        const explanationContainer = document.getElementById('quiz-explanation-container');
+        const explanationEl = document.getElementById('quiz-explanation'); // Ensure this ID exists!
+        if (explanationEl) {
+            explanationEl.innerHTML = `<strong>解説:</strong><br>${currentQ.explanation ? this.escapeHtml(currentQ.explanation) : '解説はありません。'}`;
+        }
+        explanationContainer.classList.remove('hidden');
+
+        // Play audio for answer
+        this.speakText(currentQ.answer);
     }
 
     generateChoices(correctCard) {
@@ -1417,8 +1843,12 @@ class App {
         // Prevent double click
         const buttons = document.querySelectorAll('.btn-choice');
         buttons.forEach(b => b.disabled = true);
+        document.getElementById('quiz-options').style.pointerEvents = 'none';
 
-        if (selected === correct) {
+        const currentQ = this.quizState.questions[this.quizState.current];
+        const isCorrect = (selected === correct);
+
+        if (isCorrect) {
             btn.classList.add('correct');
             this.quizState.score++;
         } else {
@@ -1427,16 +1857,34 @@ class App {
             buttons.forEach(b => {
                 if (b.textContent === correct) b.classList.add('correct');
             });
+            // Record wrong question
+            this.quizState.wrongQuestions.push(currentQ.id);
         }
 
+        // Show Explanation
+        const expContainer = document.getElementById('quiz-explanation-container');
+        const expText = document.getElementById('quiz-explanation');
+
+        if (currentQ.explanation) {
+            expText.textContent = currentQ.explanation;
+        } else {
+            expText.textContent = "解説はありません。";
+        }
+        expContainer.classList.remove('hidden');
+
+        // Scroll to bottom to show explanation on mobile
         setTimeout(() => {
-            this.quizState.current++;
-            if (this.quizState.current < this.quizState.questions.length) {
-                this.renderQuizQuestion();
-            } else {
-                this.showQuizResult();
-            }
-        }, 1500);
+            expContainer.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }, 100);
+    }
+
+    nextQuizQuestion() {
+        this.quizState.current++;
+        if (this.quizState.current < this.quizState.questions.length) {
+            this.renderQuizQuestion();
+        } else {
+            this.showQuizResult();
+        }
     }
 
     // --- Theme ---
@@ -1482,6 +1930,15 @@ class App {
         else msg = 'がんばろう！';
 
         document.getElementById('score-message').textContent = msg;
+
+        // Review Button Logic
+        const reviewBtn = document.getElementById('btn-review-quiz');
+        if (this.quizState.wrongQuestions.length > 0) {
+            reviewBtn.classList.remove('hidden');
+            reviewBtn.textContent = `間違えた問題(${this.quizState.wrongQuestions.length}問)を復習`;
+        } else {
+            reviewBtn.classList.add('hidden');
+        }
     }
 
     // --- Rendering ---
@@ -1528,6 +1985,19 @@ class App {
             if (navQuiz) navQuiz.classList.add('active');
             this.renderQuizStart();
         }
+
+        // Always render folder selector if not in quiz mode
+        if (this.state.mode !== 'quiz') {
+            this.renderFolderSelector();
+        }
+    }
+
+    handleFolderChange(folderName) {
+        this.state.currentFolder = folderName;
+        this.state.currentIndex = 0; // Reset index
+        this.updateShuffleOrder();
+        this.saveData(); // Save preference
+        this.render();
     }
 
     renderFolderSelector() {
@@ -1601,11 +2071,23 @@ class App {
             qEl.textContent = '問題がありません。編集モードで追加してください。';
             aEl.textContent = '';
             imgEl.classList.add('hidden');
+            const expEl = document.getElementById('card-explanation');
+            if (expEl) expEl.classList.add('hidden');
             return;
         }
 
         qEl.textContent = card.question;
         aEl.textContent = card.answer;
+
+        const expEl = document.getElementById('card-explanation');
+        if (expEl) {
+            if (card.explanation) {
+                expEl.textContent = card.explanation;
+                expEl.classList.remove('hidden');
+            } else {
+                expEl.classList.add('hidden');
+            }
+        }
 
         if (card.image) {
             imgEl.src = card.image;

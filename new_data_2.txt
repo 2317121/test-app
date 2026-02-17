@@ -1,0 +1,22 @@
+[
+    { id: 'q_new_21', folder: 'セキュア試験', question: 'IPヘッダに含まれる「TTL (Time To Live)」の役割は何ですか？', answer: 'ルータを経由するたびに値を減らし、0になったらパケットを破棄してループを防ぐ', explanation: '【解説】\nTTLはパケットの生存時間を表し、ルータ通過ごとに減算され、0になると破棄されます。(P.57)' },
+    { id: 'q_new_22', folder: 'セキュア試験', question: '既知のIPアドレスから、対応するMACアドレスを調べるために使用されるプロトコルはどれですか？', answer: 'ARP', explanation: '【解説】\nARP (Address Resolution Protocol) はIPアドレスを元にMACアドレスを調べるプロトコルです。(P.59)' },
+    { id: 'q_new_23', folder: 'セキュア試験', question: 'pingコマンドで使用されるプロトコルで、ネットワークの疎通確認やエラー通知を行うものはどれですか？', answer: 'ICMP', explanation: '【解説】\nICMP (Internet Control Message Protocol) はIPの補完を行い、pingなどで利用されます。(P.62)' },
+    { id: 'q_new_24', folder: 'セキュア試験', question: 'WebブラウザがWebサーバと通信する際に使用する、TCPポート80番の標準プロトコルはどれですか？', answer: 'HTTP', explanation: '【解説】\nHTTPはポート80/tcpを使用します。(P.64)' },
+    { id: 'q_new_25', folder: 'セキュア試験', question: 'TCPの接続確立時に行われる手順はどれですか？', answer: '3ウェイハンドシェイク (SYN -> SYN+ACK -> ACK)', explanation: '【解説】\nTCPはコネクション確立のために3ウェイハンドシェイクを行います。(P.67)' },
+    { id: 'q_new_26', folder: 'セキュア試験', question: 'DHCPがクライアントにIPアドレスを割り当てる際、最初に行われるメッセージ交換はどれですか？', answer: 'DHCP Discover', explanation: '【解説】\nクライアントは最初に「DHCP Discover」をブロードキャスト送信してサーバを探します。(P.74)' },
+    { id: 'q_new_27', folder: 'セキュア試験', question: '「攻撃者が発端となって、攻撃対象の保護機能を迂回して不正アクセスやデータ改ざんを行う」攻撃の分類はどれですか？', answer: '能動的攻撃 (Active Attack)', explanation: '【解説】\n攻撃者が能動的に仕掛ける攻撃を能動的攻撃と呼びます。受動的攻撃は盗聴などです。(P.76)' },
+    { id: 'q_new_28', folder: 'セキュア試験', question: '特定のサーバに対して、複数のコンピュータから一斉に大量のパケットを送りつけ、サービス不能に陥らせる攻撃を何と呼びますか？', answer: 'DDoS攻撃', explanation: '【解説】\n複数（分散型）の踏み台などを利用して行うDoS攻撃をDDoS攻撃（分散型DoS）と呼びます。(P.78)' },
+    { id: 'q_new_29', folder: 'セキュア試験', question: 'インターネットと内部ネットワークの間に設けられる、Webサーバやメールサーバなどを配置するための「非武装地帯」となるネットワーク領域を何と呼びますか？', answer: 'DMZ (DeMilitarized Zone)', explanation: '【解説】\n外部公開サーバを配置し、内部ネットワークを守るための領域をDMZと呼びます。(P.81)' },
+    { id: 'q_new_30', folder: 'セキュア試験', question: '暗号化と復号に「同じ鍵」を使用する暗号化方式はどれですか？', answer: '共通鍵暗号化方式', explanation: '【解説】\n共通鍵暗号化では、送信者と受信者が同じ鍵（共通鍵）を持ちます。(P.84)' },
+    { id: 'q_new_31', folder: 'セキュア試験', question: 'データの「改ざん」が行われていないことを確認するために用いられる、元データから生成される固定長の値はどれですか？', answer: 'ハッシュ値（メッセージダイジェスト）', explanation: '【解説】\nハッシュ関数によって生成されたハッシュ値（フィンガープリント）は、改ざん検知に利用されます。(P.86)' },
+    { id: 'q_new_32', folder: 'セキュア試験', question: 'IDS（侵入検知システム）とIPS（侵入防御システム）の違いについて正しい記述はどれですか？', answer: 'IDSは検知して通知するが、IPSは不正アクセスを検出すると遮断等の防御も行う', explanation: '【解説】\nIPSは侵入防御システムであり、検知だけでなく通信の遮断などの防御措置を能動的に行います。(P.83)' },
+    { id: 'q_new_33', folder: 'セキュア試験', question: 'AS（自律システム）の「内部」で利用されるルーティングプロトコルの総称はどれですか？', answer: 'IGP (Interior Gateway Protocol)', explanation: '【解説】\nAS内部用のプロトコルはIGPと呼ばれ、RIPやOSPFが含まれます。(P.89)' },
+    { id: 'q_new_34', folder: 'セキュア試験', question: 'RIP (Routing Information Protocol) が最適経路を選ぶための基準（メトリック）は何ですか？', answer: 'ホップ数（経由するルータの数）', explanation: '【解説】\nRIPはホップ数をメトリックとして採用しています。(P.90)' },
+    { id: 'q_new_35', folder: 'セキュア試験', question: 'OSPFが採用しているルーティングアルゴリズムの型はどれですか？', answer: 'リンクステート型', explanation: '【解説】\nOSPFはリンクステート型のルーティングプロトコルです。(P.91)' },
+    { id: 'q_new_36', folder: 'セキュア試験', question: 'RIPv1とRIPv2の大きな違いの一つとして、RIPv2で可能になったことは何ですか？', answer: 'サブネットマスクの通知（クラスレスルーティング対応）', explanation: '【解説】\nRIPv2はクラスレスルーティングプロトコルであり、サブネットマスクを通知できます。(P.93)' },
+    { id: 'q_new_37', folder: 'セキュア試験', question: 'ルーティングループを防ぐ機能の一つで、「あるインターフェイスから受信した経路情報は、そのインターフェイスからは通知しない」という仕組みを何と呼びますか？', answer: 'スプリットホライズン', explanation: '【解説】\n情報源に同じ情報を教え直さないことでループを防ぐ機能をスプリットホライズンと呼びます。(P.104)' },
+    { id: 'q_new_38', folder: 'セキュア試験', question: 'シスコルータにおける「アドミニストレーティブディスタンス（AD値）」において、最も優先度が高い（値が小さい）のはどれですか？', answer: '直接接続 (0)', explanation: '【解説】\n直接接続のAD値は0で、最も優先されます。次はスタティックルートの1です。(P.97)' },
+    { id: 'q_new_39', folder: 'セキュア試験', question: 'RIPにおけるメトリックの最大値（到達不能を表す値）はいくつですか？', answer: '16', explanation: '【解説】\nRIPでは15が有効な上限で、16は到達不能（無限大）を意味します。(P.103)' },
+    { id: 'q_new_40', folder: 'セキュア試験', question: 'WANサービスにおいて、物理層とデータリンク層をカバーし、DLCIという識別子を使ってパケット交換を行うサービスはどれですか？', answer: 'フレームリレー', explanation: '【解説】\nフレームリレーはパケット交換型のWANサービスで、DLCIを使用します。(P.115-116)' }
+]

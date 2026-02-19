@@ -131,68 +131,94 @@ class App {
 
     // --- Data Management ---
 
-    render() {
-        // Update View Visibility
-        ['study', 'edit', 'dashboard', 'quiz'].forEach(m => {
-            const view = document.getElementById(`${m}-view`);
-            if (view) {
-                if (m === this.state.mode) {
-                    view.classList.remove('hidden');
-                } else {
-                    view.classList.add('hidden');
-                }
-            }
-        });
+    // --- Quiz Logic ---
 
-        // Update Nav Active State
-        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-        const navId = this.state.mode === 'quiz' ? 'nav-quiz' : `nav-${this.state.mode}`;
-        const activeNav = document.getElementById(navId);
-        if (activeNav) activeNav.classList.add('active');
-
-        // Mode specific render logic
-        if (this.state.mode === 'study') {
-            this.renderCard();
-            this.updateProgress();
-        } else if (this.state.mode === 'edit') {
-            this.renderList();
-        } else if (this.state.mode === 'dashboard') {
-            this.renderDashboard();
-        } else if (this.state.mode === 'quiz') {
-            // Initial render request or return to tab
-            if (!this.quizState) {
-                this.startQuiz();
-            }
+    // クイズ状態をlocalStorageに保存
+    saveQuizState() {
+        if (this.quizState) {
+            // キューはIDのみ保存してカードデータを軽量化
+            const saveObj = {
+                queueIds: this.quizState.queue.map(c => c.id),
+                currentIndex: this.quizState.currentIndex,
+                correctCount: this.quizState.correctCount,
+                incorrectIds: Array.from(this.quizState.incorrectIds || []),
+                folder: this.state.currentFolder
+            };
+            localStorage.setItem('quizState_v1', JSON.stringify(saveObj));
+        } else {
+            localStorage.removeItem('quizState_v1');
         }
     }
 
-    // --- Quiz Logic ---
+    // 中断したクイズを復元して再開
+    resumeQuiz() {
+        try {
+            const saved = localStorage.getItem('quizState_v1');
+            if (!saved) return false;
+            const obj = JSON.parse(saved);
+
+            // フォルダが変わっていたら再開不可
+            if (obj.folder !== this.state.currentFolder) return false;
+
+            const cardMap = new Map(this.state.cards.map(c => [c.id, c]));
+            const queue = (obj.queueIds || []).map(id => cardMap.get(id)).filter(Boolean);
+            if (queue.length < 4) return false;
+
+            this.quizState = {
+                queue,
+                currentIndex: obj.currentIndex || 0,
+                correctCount: obj.correctCount || 0,
+                incorrectIds: new Set(obj.incorrectIds || []),
+                currentQuestion: null,
+                isAnswered: false
+            };
+            return true;
+        } catch (e) {
+            console.warn('Quiz resume failed:', e);
+            return false;
+        }
+    }
 
     startQuiz() {
         try {
             console.log("Starting Quiz...");
-            // Filter cards based on current folder
-            let pool = this.filterCardsByFolder(this.state.folders.includes(this.state.currentFolder) ? this.state.currentFolder : 'All');
 
-            console.log("Pool size:", pool.length);
+            // UIからフォルダとタイプを取得
+            const folderSelect = document.getElementById('quiz-folder-select');
+            const typeSelect = document.getElementById('quiz-type');
+            const quizType = typeSelect ? typeSelect.value : '4choice';
+            const targetFolder = folderSelect ? folderSelect.value : this.state.currentFolder;
+
+            // 保存データがあれば、バナー経由で再開するのでここでは何もしない
+            localStorage.removeItem('quizState_v1');
+
+            // 新規開始
+            let pool = this.filterCardsByFolder(targetFolder);
 
             if (pool.length < 4) {
                 alert('クイズをするには、このフォルダに少なくとも4枚のカードが必要です。');
-                this.setMode('study'); // Go back
                 return;
             }
 
-            // Shuffle pool
-            pool = this.getRandomSubarray(pool, pool.length); // Shuffle all
+            pool = this.getRandomSubarray(pool, pool.length);
 
             this.quizState = {
                 queue: pool,
+                questions: pool,   // 旧システム互換エイリアス
                 currentIndex: 0,
+                current: 0,        // 旧システム互換エイリアス
+                score: 0,
                 correctCount: 0,
+                incorrectIds: new Set(),
+                wrongQuestions: [], // 旧システム互換
                 currentQuestion: null,
-                isAnswered: false
+                isAnswered: false,
+                type: quizType,
+                folder: targetFolder
             };
 
+            this.showQuizContainer();
+            this.saveQuizState();
             this.renderQuizQuestion();
         } catch (e) {
             console.error("Quiz Error:", e);
@@ -200,78 +226,174 @@ class App {
         }
     }
 
+    // 間違えた問題だけで復習クイズを開始
+    startReviewQuiz() {
+        const qState = this.quizState;
+
+        // 新旧両システムの不正解リストを取得
+        let wrongIds = [];
+        if (qState && qState.incorrectIds && qState.incorrectIds.size > 0) {
+            wrongIds = Array.from(qState.incorrectIds);
+        } else if (qState && qState.wrongQuestions && qState.wrongQuestions.length > 0) {
+            wrongIds = qState.wrongQuestions;
+        }
+
+        if (wrongIds.length === 0) {
+            alert('復習する問題がありません。');
+            return;
+        }
+
+        const wrongSet = new Set(wrongIds);
+        const wrongCards = this.state.cards.filter(c => wrongSet.has(c.id));
+        if (wrongCards.length < 1) {
+            alert('復習する問題が見つかりませんでした。');
+            return;
+        }
+
+        // 4問未満でもクイズを成立させるために全カードをプールに混ぜる
+        let pool = wrongCards;
+        if (pool.length < 4) {
+            const extras = this.state.cards.filter(c => !wrongSet.has(c.id));
+            pool = [...wrongCards, ...this.getRandomSubarray(extras, 4 - wrongCards.length)];
+        }
+        pool = this.getRandomSubarray(pool, pool.length);
+
+        // クイズタイプを引き継ぐ
+        const quizType = (qState && qState.type) ? qState.type : '4choice';
+
+        this.quizState = {
+            queue: pool,
+            questions: pool,
+            currentIndex: 0,
+            current: 0,
+            score: 0,
+            correctCount: 0,
+            incorrectIds: new Set(),
+            wrongQuestions: [],
+            currentQuestion: null,
+            isAnswered: false,
+            isReview: true,
+            type: quizType
+        };
+
+        localStorage.removeItem('quizState_v1');
+        this.showQuizContainer();
+        this.renderQuizQuestion();
+    }
+
+    showQuizContainer() {
+        const startEl = document.getElementById('quiz-start');
+        const containerEl = document.getElementById('quiz-question-container');
+        const resultEl = document.getElementById('quiz-result');
+        if (startEl) startEl.classList.add('hidden');
+        if (containerEl) containerEl.classList.remove('hidden');
+        if (resultEl) resultEl.classList.add('hidden');
+    }
+
+    showQuizResult() {
+        const qState = this.quizState;
+        const startEl = document.getElementById('quiz-start');
+        const containerEl = document.getElementById('quiz-question-container');
+        const resultEl = document.getElementById('quiz-result');
+        if (startEl) startEl.classList.add('hidden');
+        if (containerEl) containerEl.classList.add('hidden');
+        if (resultEl) resultEl.classList.remove('hidden');
+
+        // スコア表示
+        const scoreMsg = document.getElementById('score-message');
+        if (scoreMsg) {
+            const pct = Math.round((qState.correctCount / qState.queue.length) * 100);
+            scoreMsg.textContent =
+                `正解数: ${qState.correctCount} / ${qState.queue.length}  (${pct}%)\n` +
+                (pct >= 80 ? '🎉 素晴らしい！' : pct >= 60 ? '👍 もう少し！' : '📖 復習しましょう');
+        }
+
+        // 「間違えた問題を復習」ボタンの表示切り替え
+        const reviewBtn = document.getElementById('btn-review-quiz');
+        if (reviewBtn) {
+            if (!qState.isReview && qState.incorrectIds && qState.incorrectIds.size > 0) {
+                reviewBtn.classList.remove('hidden');
+            } else {
+                reviewBtn.classList.add('hidden');
+            }
+        }
+
+        // 中断データを消去
+        localStorage.removeItem('quizState_v1');
+    }
+
     renderQuizQuestion() {
         try {
             const qState = this.quizState;
-            if (!qState) {
-                console.error("No quiz state");
-                return;
-            }
+            if (!qState) { console.error("No quiz state"); return; }
 
             if (qState.currentIndex >= qState.queue.length) {
-                // End of quiz
-                alert(`クイズ終了！\n正解数: ${qState.correctCount} / ${qState.queue.length}`);
-                this.quizState = null; // Reset
-                this.startQuiz(); // Restart
+                this.showQuizResult();
                 return;
             }
 
             const card = qState.queue[qState.currentIndex];
-            if (!card) {
-                alert("Error: Card is undefined at index " + qState.currentIndex);
-                return;
-            }
+            if (!card) { alert("Error: Card is undefined at index " + qState.currentIndex); return; }
 
             qState.currentQuestion = card;
             qState.isAnswered = false;
 
-            // UI Updates
+            // 進捗更新
             const indexEl = document.getElementById('quiz-index');
             if (indexEl) indexEl.textContent = qState.currentIndex + 1;
             const totalEl = document.getElementById('quiz-total');
             if (totalEl) totalEl.textContent = qState.queue.length;
+            const scoreEl = document.getElementById('quiz-score');
+            if (scoreEl) scoreEl.textContent = `Score: ${qState.correctCount}`;
 
             const questionEl = document.getElementById('quiz-question');
-            if (questionEl) {
-                questionEl.textContent = card.question;
-            } else {
-                alert("Error: quiz-question element not found!");
-            }
+            if (questionEl) questionEl.textContent = card.question;
 
-            // Reset Feedback
-            const feedbackEl = document.getElementById('quiz-feedback');
-            if (feedbackEl) {
-                feedbackEl.classList.add('hidden');
-                feedbackEl.textContent = '';
-                feedbackEl.style.color = '';
-            }
-
-            const controlsEl = document.getElementById('quiz-controls');
-            if (controlsEl) controlsEl.classList.add('hidden');
-
+            // 解説エリアを非表示に戻す
+            const explContainer = document.getElementById('quiz-explanation-container');
+            if (explContainer) explContainer.classList.add('hidden');
             const explEl = document.getElementById('quiz-explanation');
             if (explEl) explEl.textContent = '';
 
-            // Generate Options
-            // 1 Correct + 3 Distractors
-            const distractors = this.getDistractors(card, qState.queue, 3);
-            const options = this.getRandomSubarray([card, ...distractors], 4);
-
             const optionsContainer = document.getElementById('quiz-options');
-            if (optionsContainer) {
-                optionsContainer.innerHTML = '';
+            if (!optionsContainer) return;
+            optionsContainer.innerHTML = '';
+            optionsContainer.style.pointerEvents = 'auto';
+
+            if (qState.type === 'input') {
+                // --- 記述式 ---
+                const inputGroup = document.createElement('div');
+                inputGroup.style.cssText = 'display:flex; gap:10px; flex-direction:column;';
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.id = 'quiz-input-answer';
+                input.placeholder = '回答を入力...';
+                input.style.cssText = 'padding:12px; border-radius:8px; border:1px solid #ddd; font-size:1.1rem;';
+                const submitBtn = document.createElement('button');
+                submitBtn.textContent = '回答する';
+                submitBtn.className = 'btn btn-primary';
+                submitBtn.onclick = () => this.checkInputAnswer();
+                input.onkeydown = (e) => { if (e.key === 'Enter') this.checkInputAnswer(); };
+                inputGroup.appendChild(input);
+                inputGroup.appendChild(submitBtn);
+                optionsContainer.appendChild(inputGroup);
+                input.focus();
+            } else {
+                // --- 4択 ---
+                const allPool = this.filterCardsByFolder(
+                    qState.folder || (qState.queue[0] && qState.queue[0].folder ? qState.queue[0].folder : 'All')
+                );
+                const distractors = this.getDistractors(card, qState.queue, allPool, 3);
+                const options = this.getRandomSubarray([card, ...distractors], 4);
+
                 options.forEach(opt => {
                     const btn = document.createElement('button');
                     btn.className = 'btn btn-outline quiz-option';
-                    btn.style.textAlign = 'left';
-                    btn.style.padding = '1rem';
-                    btn.style.width = '100%';
+                    btn.style.cssText = 'text-align:left; padding:1rem; width:100%;';
                     btn.textContent = opt.answer;
                     btn.onclick = () => this.handleQuizSelection(opt, btn);
                     optionsContainer.appendChild(btn);
                 });
-            } else {
-                alert("Error: quiz-options container not found!");
             }
         } catch (e) {
             alert("Render Quiz Error: " + e.message);
@@ -279,10 +401,37 @@ class App {
         }
     }
 
-    getDistractors(correctCard, pool, count) {
-        // Simple random selection from pool excluding correctCard
-        const candidates = pool.filter(c => c.id !== correctCard.id);
-        return this.getRandomSubarray(candidates, count);
+    /**
+     * ひっかけ選択肢を生成（改善版）
+     * 1. 同じフォルダのカードから優先して選ぶ
+     * 2. 答えの長さが近いものを優先
+     * 3. 足りなければ全体から補充
+     */
+    getDistractors(correctCard, quizQueue, allPool, count) {
+        const correctLen = (correctCard.answer || '').length;
+        const usedIds = new Set([correctCard.id]);
+
+        // 同じフォルダのカード（クイズキューを除く余分な候補も含む）
+        const sameFolder = allPool.filter(c => !usedIds.has(c.id) && c.folder === correctCard.folder);
+        // クイズキューのその他のカード（他フォルダのものも）
+        const queueOthers = quizQueue.filter(c => !usedIds.has(c.id) && c.folder !== correctCard.folder);
+
+        // 答えの長さ差が小さい順にソート（ひっかけ感UP）
+        const sortByLen = arr => [...arr].sort((a, b) =>
+            Math.abs((a.answer || '').length - correctLen) - Math.abs((b.answer || '').length - correctLen)
+        );
+
+        // 優先: 同フォルダ → その他
+        const candidates = [...sortByLen(sameFolder), ...sortByLen(queueOthers)];
+        const unique = [];
+        for (const c of candidates) {
+            if (!usedIds.has(c.id)) {
+                usedIds.add(c.id);
+                unique.push(c);
+                if (unique.length >= count) break;
+            }
+        }
+        return unique;
     }
 
     getRandomSubarray(arr, size) {
@@ -303,51 +452,52 @@ class App {
         const correctCard = this.quizState.currentQuestion;
         const isCorrect = selectedCard.id === correctCard.id;
 
-        const feedbackEl = document.getElementById('quiz-feedback');
-        if (feedbackEl) {
-            feedbackEl.classList.remove('hidden');
-            if (isCorrect) {
-                this.quizState.correctCount++;
-                feedbackEl.textContent = '正解! 🙆‍♂️';
-                feedbackEl.style.color = '#10b981';
-            } else {
-                feedbackEl.textContent = '不正解... 🙅‍♂️';
-                feedbackEl.style.color = '#ef4444';
-            }
+        if (isCorrect) {
+            this.quizState.correctCount++;
+        } else {
+            // 不正解を記録
+            if (!this.quizState.incorrectIds) this.quizState.incorrectIds = new Set();
+            this.quizState.incorrectIds.add(correctCard.id);
         }
 
-        // Style all buttons
+        // 進捗を中断保存
+        this.saveQuizState();
+
+        // ボタンの色付け
         const allBtns = document.querySelectorAll('.quiz-option');
         allBtns.forEach(btn => {
-            // Highlight correct answer
             if (btn.textContent === correctCard.answer) {
                 btn.classList.remove('btn-outline');
-                btn.style.backgroundColor = '#d1fae5'; // Light green
+                btn.style.backgroundColor = '#d1fae5';
                 btn.style.borderColor = '#10b981';
                 btn.style.color = '#065f46';
             } else if (btn === btnElement && !isCorrect) {
-                // Highlight selected wrong answer
                 btn.classList.remove('btn-outline');
-                btn.style.backgroundColor = '#fee2e2'; // Light red
+                btn.style.backgroundColor = '#fee2e2';
                 btn.style.borderColor = '#ef4444';
                 btn.style.color = '#991b1b';
             }
             btn.disabled = true;
         });
 
-        // Show Explanation
+        // フィードバック表示（解説エリアを流用）
+        const explContainer = document.getElementById('quiz-explanation-container');
         const expEl = document.getElementById('quiz-explanation');
-        if (expEl) {
-            if (correctCard.explanation) {
-                expEl.textContent = correctCard.explanation;
-            } else {
-                expEl.textContent = '（解説はありません）';
-            }
-            expEl.classList.remove('hidden'); // Ensure it is visible if previously hidden? Actually logic marks the container
-        }
+        const nextBtn = document.getElementById('btn-next-question');
 
-        const controlsEl = document.getElementById('quiz-controls');
-        if (controlsEl) controlsEl.classList.remove('hidden');
+        if (expEl) {
+            const feedbackLine = isCorrect ? '✅ 正解！' : `❌ 不正解  正解: ${correctCard.answer}`;
+            const explText = correctCard.explanation ? `\n\n${correctCard.explanation}` : '';
+            expEl.textContent = feedbackLine + explText;
+        }
+        if (explContainer) explContainer.classList.remove('hidden');
+        if (nextBtn) nextBtn.textContent = (this.quizState.currentIndex + 1 >= this.quizState.queue.length) ? '結果を見る' : '次へ';
+
+        // スマホ対応: フィードバック表示後に「次へ」ボタンまで自動スクロール
+        setTimeout(() => {
+            const target = nextBtn || explContainer;
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }, 100);
     }
 
     nextQuizQuestion() {
@@ -1601,16 +1751,17 @@ class App {
     }
 
     // --- Quiz Mode (Phase 3) ---
+    // NOTE: 実際のクイズロジックは行174〜の新システムで管理されています。
+    // ここは `renderQuizStart` のみ残し、その他は重複のため削除します。
 
     renderQuizStart() {
         document.getElementById('quiz-start').classList.remove('hidden');
         document.getElementById('quiz-question-container').classList.add('hidden');
         document.getElementById('quiz-result').classList.add('hidden');
 
-        // Populate Folder Select
+        // フォルダセレクトを更新
         const folderSelect = document.getElementById('quiz-folder-select');
         if (folderSelect) {
-            // Get unique folders
             let folders = new Set(['メイン']);
             if (this.state.folders && Array.isArray(this.state.folders)) {
                 this.state.folders.forEach(f => folders.add(f));
@@ -1620,273 +1771,60 @@ class App {
             });
             const sortedFolders = Array.from(folders).sort();
 
-            let html = '<option value="All">すべてのフォルダ</option>';
-            // Pre-select current folder if valid
             const preSelect = (this.state.currentFolder && this.state.currentFolder !== 'All') ? this.state.currentFolder : 'All';
-
+            let html = '<option value="All">すべてのフォルダ</option>';
             sortedFolders.forEach(f => {
                 const selected = (f === preSelect) ? 'selected' : '';
                 html += `<option value="${f}" ${selected}>${f}</option>`;
             });
             folderSelect.innerHTML = html;
         }
+
+        // 中断保存データがあれば「続きから」バナーを表示
+        const resumeBanner = document.getElementById('quiz-resume-banner');
+        if (resumeBanner) {
+            const savedRaw = localStorage.getItem('quizState_v1');
+            if (savedRaw) {
+                try {
+                    const sv = JSON.parse(savedRaw);
+                    if (sv && sv.queueIds && sv.queueIds.length > 0) {
+                        resumeBanner.innerHTML = `
+                        <div style="background:#eff6ff; border:1px solid #93c5fd; border-radius:12px; padding:1rem 1.2rem; margin-bottom:1rem;">
+                            <p style="margin:0 0 0.75rem; font-weight:600; color:#1d4ed8;">⏸ 前回の途中から再開できます</p>
+                            <p style="margin:0 0 0.75rem; font-size:0.9rem; color:#374151;">${sv.currentIndex + 1}問目（全${sv.queueIds.length}問）の途中</p>
+                            <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+                                <button class="btn btn-primary" style="flex:1; min-width:120px;" onclick="app._resumeFromBanner()">▶ 続きから再開</button>
+                                <button class="btn btn-outline" style="flex:1; min-width:120px;" onclick="app._discardSaveAndStart()">🔄 最初から始める</button>
+                            </div>
+                        </div>`;
+                        resumeBanner.classList.remove('hidden');
+                        return;
+                    }
+                } catch (_) { localStorage.removeItem('quizState_v1'); }
+            }
+            resumeBanner.innerHTML = '';
+            resumeBanner.classList.add('hidden');
+        }
     }
 
-    startQuiz(mode = 'normal') {
-        let pool = [];
-
-        // Get Quiz Type
+    _resumeFromBanner() {
         const typeSelect = document.getElementById('quiz-type');
         const quizType = typeSelect ? typeSelect.value : '4choice';
-
-        if (mode === 'review') {
-            if (!this.quizState || !this.quizState.wrongQuestions || this.quizState.wrongQuestions.length === 0) {
-                alert('復習する問題がありません。');
-                return;
-            }
-            pool = this.state.cards.filter(c => this.quizState.wrongQuestions.includes(c.id));
-        } else {
-            // Get selected folder from UI
-            const folderSelect = document.getElementById('quiz-folder-select');
-            let targetFolder = folderSelect ? folderSelect.value : 'All';
-
-            // Fallback: If UI missing or "All" selected, check if we should default to Secure?
-            // User wanted Secure 59 questions. 
-            // If user explicitly selects "All", we should show All.
-            // If user selects specific folder, show that.
-
-            // However, to keep the "default to Secure if available AND no specific selection made (or UI missing)" logic:
-            if (!folderSelect) {
-                const secure = this.state.folders.find(f => f.includes('セキュア'));
-                if (secure) targetFolder = secure;
-            }
-
-            pool = this.filterCardsByFolder(targetFolder);
-        }
-
-        if (pool.length < 1) {
-            alert('クイズをするには、少なくとも1つの問題が必要です。');
-            return;
-        }
-
-        // Shuffle
-        const shuffled = [...pool].sort(() => Math.random() - 0.5);
-
-        this.quizState = {
-            questions: shuffled, // Use ALL questions
-            current: 0,
-            score: 0,
-            wrongQuestions: [],
-            mode: mode,
-            type: quizType // Save type
-        };
-
-        document.getElementById('quiz-start').classList.add('hidden');
-        document.getElementById('quiz-question-container').classList.remove('hidden');
-        document.getElementById('quiz-result').classList.add('hidden'); // Ensure result is hidden
-        this.renderQuizQuestion();
-    }
-
-    startReviewQuiz() {
-        this.startQuiz('review');
-    }
-
-    renderQuizQuestion() {
-        const q = this.quizState.questions[this.quizState.current];
-        const total = this.quizState.questions.length;
-
-        // Update Header
-        document.getElementById('quiz-index').textContent = this.quizState.current + 1;
-        document.getElementById('quiz-total').textContent = total;
-        document.getElementById('quiz-score').textContent = `Score: ${this.quizState.score}`;
-
-        // Question
-        document.getElementById('quiz-question').textContent = q.question;
-        const imgEl = document.getElementById('quiz-image');
-        if (q.image) {
-            imgEl.src = q.image;
-            imgEl.classList.remove('hidden');
-        } else {
-            imgEl.classList.add('hidden');
-        }
-
-        // Reset Explanation & Next Button
-        document.getElementById('quiz-explanation-container').classList.add('hidden');
-        document.getElementById('quiz-options').style.pointerEvents = 'auto'; // Enable clicks
-        const container = document.getElementById('quiz-options');
-        container.innerHTML = '';
-
-        // Add Audio Button to Question
-        const qEl = document.getElementById('quiz-question');
-        // Create audio button
-        const audioBtn = document.createElement('button');
-        audioBtn.className = 'btn-icon'; // Need style?
-        audioBtn.style.marginLeft = '10px';
-        audioBtn.style.verticalAlign = 'middle';
-        audioBtn.style.cursor = 'pointer';
-        audioBtn.style.background = 'none';
-        audioBtn.style.border = 'none';
-        audioBtn.style.color = 'var(--primary-color)';
-        audioBtn.innerHTML = '<i data-lucide="volume-2"></i>';
-        audioBtn.onclick = (e) => {
-            e.stopPropagation();
-            this.speakText(q.question);
-        };
-        qEl.appendChild(audioBtn);
-        if (window.lucide) lucide.createIcons();
-
-        // Branch by Quiz Type
-        if (this.quizState.type === 'input') {
-            // --- Input Type ---
-            const inputGroup = document.createElement('div');
-            inputGroup.style.display = 'flex';
-            inputGroup.style.gap = '10px';
-            inputGroup.style.flexDirection = 'column';
-
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.id = 'quiz-input-answer';
-            input.className = 'form-control'; // reuse style?
-            input.placeholder = '回答を入力...';
-            input.style.padding = '12px';
-            input.style.borderRadius = '8px';
-            input.style.border = '1px solid #ddd';
-            input.style.fontSize = '1.1rem';
-
-            const submitBtn = document.createElement('button');
-            submitBtn.textContent = '回答する';
-            submitBtn.className = 'btn btn-primary';
-            submitBtn.onclick = () => this.checkInputAnswer();
-
-            // Enter key support
-            input.onkeydown = (e) => {
-                if (e.key === 'Enter') this.checkInputAnswer();
-            };
-
-            inputGroup.appendChild(input);
-            inputGroup.appendChild(submitBtn);
-            container.appendChild(inputGroup);
-            input.focus();
-
-        } else {
-            // --- 4 Choice Type ---
-            const choices = this.generateChoices(q);
-            choices.forEach(choice => {
-                const btn = document.createElement('button');
-                btn.className = 'btn-choice';
-                btn.textContent = choice;
-                btn.onclick = () => this.answerQuiz(btn, choice, q.answer);
-                container.appendChild(btn);
-            });
-        }
-    }
-
-    checkInputAnswer() {
-        const input = document.getElementById('quiz-input-answer');
-        if (!input) return;
-        const userAnswer = input.value.trim();
-        if (!userAnswer) return;
-
-        const currentQ = this.quizState.questions[this.quizState.current];
-        const isCorrect = (userAnswer.toLowerCase() === currentQ.answer.toLowerCase()); // Simple check
-
-        const container = document.getElementById('quiz-options');
-        container.innerHTML = '';
-
-        const resultDiv = document.createElement('div');
-        resultDiv.style.textAlign = 'center';
-        resultDiv.style.padding = '1rem';
-        resultDiv.style.fontSize = '1.2rem';
-        resultDiv.style.fontWeight = 'bold';
-
-        if (isCorrect) {
-            resultDiv.textContent = '正解！😄';
-            resultDiv.style.color = '#10b981'; // green
-            this.quizState.score++;
-            this.rateCard(5);
-        } else {
-            resultDiv.innerHTML = `不正解... 😢<br><span style="font-size: 1rem; color: var(--text-color);">正解: ${this.escapeHtml(currentQ.answer)}</span>`;
-            resultDiv.style.color = '#ef4444'; // red
-            this.quizState.wrongQuestions.push(currentQ.id);
-            this.rateCard(1);
-        }
-        container.appendChild(resultDiv);
-        document.getElementById('quiz-score').textContent = `Score: ${this.quizState.score}`;
-
-        // Show Explanation
-        const explanationContainer = document.getElementById('quiz-explanation-container');
-        const explanationEl = document.getElementById('quiz-explanation'); // Ensure this ID exists!
-        if (explanationEl) {
-            explanationEl.innerHTML = `<strong>解説:</strong><br>${currentQ.explanation ? this.escapeHtml(currentQ.explanation) : '解説はありません。'}`;
-        }
-        explanationContainer.classList.remove('hidden');
-
-        // Play audio for answer
-        this.speakText(currentQ.answer);
-    }
-
-    generateChoices(correctCard) {
-        // Pick 3 wrong answers
-        const wrongAnswers = this.state.cards
-            .filter(c => c.id !== correctCard.id)
-            .map(c => c.answer);
-
-        // Shuffle wrong answers and pick 3
-        const selectedWrong = wrongAnswers.sort(() => Math.random() - 0.5).slice(0, 3);
-
-        // Combine with correct answer and shuffle
-        const all = [correctCard.answer, ...selectedWrong];
-        return all.sort(() => Math.random() - 0.5);
-    }
-
-    answerQuiz(btn, selected, correct) {
-        // Prevent double click
-        const buttons = document.querySelectorAll('.btn-choice');
-        buttons.forEach(b => b.disabled = true);
-        document.getElementById('quiz-options').style.pointerEvents = 'none';
-
-        const currentQ = this.quizState.questions[this.quizState.current];
-        const isCorrect = (selected === correct);
-
-        if (isCorrect) {
-            btn.classList.add('correct');
-            this.quizState.score++;
-        } else {
-            btn.classList.add('wrong');
-            // Show correct one
-            buttons.forEach(b => {
-                if (b.textContent === correct) b.classList.add('correct');
-            });
-            // Record wrong question
-            this.quizState.wrongQuestions.push(currentQ.id);
-        }
-
-        // Show Explanation
-        const expContainer = document.getElementById('quiz-explanation-container');
-        const expText = document.getElementById('quiz-explanation');
-
-        if (currentQ.explanation) {
-            expText.textContent = currentQ.explanation;
-        } else {
-            expText.textContent = "解説はありません。";
-        }
-        expContainer.classList.remove('hidden');
-
-        // Scroll to bottom to show explanation on mobile
-        setTimeout(() => {
-            expContainer.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        }, 100);
-    }
-
-    nextQuizQuestion() {
-        this.quizState.current++;
-        if (this.quizState.current < this.quizState.questions.length) {
+        if (this.resumeQuiz()) {
+            this.quizState.type = quizType;
+            this.showQuizContainer();
             this.renderQuizQuestion();
         } else {
-            this.showQuizResult();
+            localStorage.removeItem('quizState_v1');
+            this.renderQuizStart();
         }
     }
 
+    _discardSaveAndStart() {
+        localStorage.removeItem('quizState_v1');
+        const resumeBanner = document.getElementById('quiz-resume-banner');
+        if (resumeBanner) { resumeBanner.innerHTML = ''; resumeBanner.classList.add('hidden'); }
+    }
     // --- Theme ---
     initTheme() {
         const savedTheme = localStorage.getItem('theme');
@@ -1914,31 +1852,44 @@ class App {
     }
 
     showQuizResult() {
+        const qState = this.quizState;
         document.getElementById('quiz-question-container').classList.add('hidden');
         document.getElementById('quiz-result').classList.remove('hidden');
 
-        const score = this.quizState.score;
-        const total = this.quizState.questions.length;
-        const scorePer = Math.round((score / total) * 100);
+        // 新旧どちらのquizState構造にも対応
+        const score = qState.score !== undefined ? qState.score : (qState.correctCount || 0);
+        const total = qState.questions ? qState.questions.length : (qState.queue ? qState.queue.length : 0);
+        const scorePer = total > 0 ? Math.round((score / total) * 100) : 0;
 
-        document.getElementById('final-score').textContent = scorePer;
+        const finalScoreEl = document.getElementById('final-score');
+        if (finalScoreEl) finalScoreEl.textContent = scorePer;
 
-        let msg = '';
-        if (scorePer === 100) msg = '完璧です！';
-        else if (scorePer >= 80) msg = '素晴らしい！';
-        else if (scorePer >= 60) msg = 'あと少し！';
-        else msg = 'がんばろう！';
-
-        document.getElementById('score-message').textContent = msg;
-
-        // Review Button Logic
-        const reviewBtn = document.getElementById('btn-review-quiz');
-        if (this.quizState.wrongQuestions.length > 0) {
-            reviewBtn.classList.remove('hidden');
-            reviewBtn.textContent = `間違えた問題(${this.quizState.wrongQuestions.length}問)を復習`;
-        } else {
-            reviewBtn.classList.add('hidden');
+        const scoreMsg = document.getElementById('score-message');
+        if (scoreMsg) {
+            let msg = '';
+            if (scorePer === 100) msg = '完璧です！🎉';
+            else if (scorePer >= 80) msg = '素晴らしい！👏';
+            else if (scorePer >= 60) msg = 'あと少し！💪';
+            else msg = '復習しましょう！📖';
+            scoreMsg.textContent = `正解: ${score}/${total} (${scorePer}%) ${msg}`;
         }
+
+        // 復習ボタンの表示制御（新旧両対応）
+        const reviewBtn = document.getElementById('btn-review-quiz');
+        if (reviewBtn) {
+            const wrongCount = qState.wrongQuestions ? qState.wrongQuestions.length
+                : (qState.incorrectIds ? qState.incorrectIds.size : 0);
+            const isReview = qState.isReview || qState.mode === 'review';
+            if (wrongCount > 0 && !isReview) {
+                reviewBtn.classList.remove('hidden');
+                reviewBtn.textContent = `間違えた問題(${wrongCount}問)を復習`;
+            } else {
+                reviewBtn.classList.add('hidden');
+            }
+        }
+
+        // クイズ中断データを消去
+        localStorage.removeItem('quizState_v1');
     }
 
     // --- Rendering ---
@@ -1983,7 +1934,18 @@ class App {
         } else if (this.state.mode === 'quiz') {
             quizView.classList.remove('hidden');
             if (navQuiz) navQuiz.classList.add('active');
-            this.renderQuizStart();
+
+            if (this.quizState) {
+                // クイズ進行中: 問題画面を維持
+                this.showQuizContainer();
+                // 回答待ち状態のみ再描画（フィードバック表示を消さない）
+                if (!this.quizState.isAnswered) {
+                    this.renderQuizQuestion();
+                }
+            } else {
+                // 開始画面の表示（バナー付き）
+                this.renderQuizStart();
+            }
         }
 
         // Always render folder selector if not in quiz mode

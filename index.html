@@ -236,6 +236,7 @@
         <!-- Quiz View -->
         <div id="quiz-view" class="view hidden">
             <div id="quiz-start">
+                <div id="quiz-resume-banner" class="hidden"></div>
                 <h2>実力テスト</h2>
                 <p>ランダムに10問出題されます。</p>
                 <div class="form-group">
@@ -253,6 +254,7 @@
                 </div>
                 <button class="btn btn-primary" onclick="app.startQuiz()">テストを開始</button>
             </div>
+
 
             <div id="quiz-question-container" class="hidden">
                 <div class="quiz-header"
@@ -340,20 +342,6 @@
                     .then(registration => {
                         console.log('ServiceWorker registration successful with scope: ', registration.scope);
                     }, err => {
-                        console.log('ServiceWorker registration failed: ', err);
-                    });
-            });
-        }
-    </script>
-    <!-- Service Worker Registration -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./service-worker.js')
-                    .then(registration => {
-                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                    })
-                    .catch(err => {
                         console.log('ServiceWorker registration failed: ', err);
                     });
             });

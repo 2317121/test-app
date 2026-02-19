@@ -1,38 +1,38 @@
-const CACHE_NAME = 'skill-check-v2';
-const urlsToCache = [
+const CACHE_NAME = 'skill-test-app-v6';
+const ASSETS_TO_CACHE = [
     './',
     './index.html',
     './style.css',
     './script.js',
+    './data.js',
     './manifest.json',
-    // Lucide icons are loaded from CDN, so we might need to cache them or rely on browser cache.
-    // Ideally, download lucide.min.js and serve locally for full offline support.
-    // For now, we cache the local files.
+    'https://unpkg.com/lucide@latest'
 ];
 
+// Install Event: Cache assets
 self.addEventListener('install', (event) => {
+    self.skipWaiting(); // Force activation immediately
     event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then((cache) => {
-                console.log('Opened cache');
-                return cache.addAll(urlsToCache);
-            })
+        caches.open(CACHE_NAME).then((cache) => {
+            console.log('Opened cache');
+            return cache.addAll(ASSETS_TO_CACHE);
+        })
     );
 });
 
+// Fetch Event: Serve from cache if available, otherwise fetch from network
 self.addEventListener('fetch', (event) => {
     event.respondWith(
-        caches.match(event.request)
-            .then((response) => {
-                // Cache hit - return response
-                if (response) {
-                    return response;
-                }
-                return fetch(event.request);
-            })
+        caches.match(event.request).then((response) => {
+            if (response) {
+                return response;
+            }
+            return fetch(event.request);
+        })
     );
 });
 
+// Activate Event: Clean up old caches
 self.addEventListener('activate', (event) => {
     const cacheWhitelist = [CACHE_NAME];
     event.waitUntil(

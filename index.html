@@ -4,349 +4,396 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>技能照査 勉強アプリ</title>
+    <title>NeuronQ - 最強学習アプリ</title>
+    <meta name="description" content="フラッシュカード、クイズ、間隔反復を組み合わせた最強の学習アプリ">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2997/2997327.png">
-    <meta name="theme-color" content="#6366f1">
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <meta name="theme-color" content="#6366f1">
 </head>
 
 <body>
-    <!-- Top Navigation -->
-    <nav class="top-nav">
-        <div class="logo" style="display: flex; align-items: center; gap: 0.5rem; color: var(--primary-color);">
-            <i data-lucide="brain-circuit"></i>
-            <span style="font-weight: 800; font-size: 1.25rem;">SkillCheck</span>
+    <!-- Top Header (Desktop) -->
+    <header id="top-header">
+        <div class="header-left">
+            <div class="logo">
+                <i data-lucide="brain-circuit"></i>
+                <span>NeuronQ</span>
+            </div>
         </div>
-
-
-        <button id="theme-toggle" class="btn-icon" title="テーマ切り替え (Dark/Light)" onclick="app.toggleTheme()">
-            <i data-lucide="moon"></i>
-        </button>
-        <div class="nav-links" style="display: flex; gap: 0.5rem;">
-            <button id="nav-study" class="nav-item active" onclick="app.setMode('study')">学習</button>
-            <button id="nav-quiz" class="nav-item" onclick="app.setMode('quiz')">4択</button>
-            <button id="nav-edit" class="nav-item" onclick="app.setMode('edit')">編集</button>
-            <button id="nav-dashboard" class="nav-item" onclick="app.setMode('dashboard')">データ</button>
+        <div class="header-center" id="desktop-nav">
+            <button class="tab-btn active" data-mode="study" onclick="app.setMode('study')">
+                <i data-lucide="book-open"></i><span>学習</span>
+            </button>
+            <button class="tab-btn" data-mode="quiz" onclick="app.setMode('quiz')">
+                <i data-lucide="list-checks"></i><span>テスト</span>
+            </button>
+            <button class="tab-btn" data-mode="edit" onclick="app.setMode('edit')">
+                <i data-lucide="file-edit"></i><span>編集</span>
+            </button>
+            <button class="tab-btn" data-mode="stats" onclick="app.setMode('stats')">
+                <i data-lucide="bar-chart-3"></i><span>分析</span>
+            </button>
         </div>
+        <div class="header-right">
+            <div class="streak-badge" id="streak-badge" title="連続学習日数">
+                <i data-lucide="flame"></i>
+                <span id="streak-count">0</span>
+            </div>
+            <button class="icon-btn" onclick="app.toggleTheme()" title="テーマ切替">
+                <i data-lucide="moon" id="theme-icon"></i>
+            </button>
         </div>
-    </nav>
+    </header>
 
-    <main style="flex: 1; overflow-y: auto; padding: 1rem; position: relative;">
-        <!-- Study Mode -->
-        <div id="study-view" class="study-container">
-            <div class="folder-select-container" style="margin-bottom: 10px; text-align: center;">
-                <select id="folder-select" onchange="app.handleFolderChange(this.value)"
-                    style="padding: 8px; border-radius: 8px; border: 1px solid #ddd; width: 80%; max-width: 300px; font-size: 16px;">
-                    <option value="All">すべて</option>
+    <!-- Main Content Area -->
+    <main id="main-content">
+
+        <!-- ==================== STUDY VIEW ==================== -->
+        <section id="study-view" class="view active-view">
+            <div class="study-toolbar">
+                <select id="study-folder-select" class="select-modern"
+                    onchange="app.handleStudyFolderChange(this.value)">
+                    <option value="All">すべてのフォルダ</option>
                 </select>
-            </div>
-            <div class="progress-info">
-                Question <span id="current-index">1</span> / <span id="total-count">5</span>
+                <div class="toolbar-actions">
+                    <button class="chip-btn" onclick="app.toggleShuffle()" id="btn-shuffle" title="シャッフル">
+                        <i data-lucide="shuffle"></i>
+                    </button>
+                    <button class="chip-btn" onclick="app.filterDueCards()" id="btn-due" title="復習カードのみ">
+                        <i data-lucide="clock"></i>
+                    </button>
+                </div>
             </div>
 
-            <div class="flashcard-container" id="flashcard-container">
-                <div class="flashcard" id="flashcard">
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="study-progress"></div>
+            </div>
+            <div class="progress-text">
+                <span id="study-current">1</span> / <span id="study-total">0</span>
+                <span class="mastery-indicator" id="mastery-indicator"></span>
+            </div>
+
+            <div class="flashcard-wrapper" id="flashcard-wrapper">
+                <div class="flashcard" id="flashcard" onclick="app.flipCard()">
                     <div class="card-face card-front">
-                        <div class="card-label">Question</div>
-                        <div class="card-content" id="card-question">
-                            ここに問題が表示されます
-                        </div>
-                        <!-- Image on Front -->
-                        <img id="card-image-front" class="card-image hidden" alt="Question Image">
-                        <button class="btn-audio" onclick="app.speakQuestion(event)" title="読み上げ">
+                        <div class="card-badge">Question</div>
+                        <div class="card-body" id="card-question">問題を追加してください</div>
+                        <img id="card-image" class="card-img hidden" alt="">
+                        <button class="tts-btn" onclick="event.stopPropagation(); app.speak('question')" title="読み上げ">
                             <i data-lucide="volume-2"></i>
                         </button>
                     </div>
                     <div class="card-face card-back">
-                        <div class="card-label">Answer</div>
-                        <div class="card-content" id="card-answer">
-                            ここに答えが表示されます
-                        </div>
-                        <div class="card-explanation hidden" id="card-explanation">
-                            ここに解説が表示されます
-                        </div>
+                        <div class="card-badge">Answer</div>
+                        <div class="card-body" id="card-answer">答えが表示されます</div>
+                        <div class="card-explanation hidden" id="card-explanation"></div>
                     </div>
                 </div>
             </div>
 
-            <!-- Controls -->
-            <div class="controls" style="flex-wrap: wrap; justify-content: center; gap: 0.5rem;">
-                <button class="btn btn-swipe-left" onclick="app.rateCard(1)"
-                    style="min-width: 100px; padding: 0.5rem 1rem;">
-                    😢 忘れた
+            <div class="study-actions">
+                <button class="action-btn wrong" onclick="app.rateCard(1)">
+                    <i data-lucide="x"></i>
+                    <span>忘れた</span>
                 </button>
-                <button id="btn-auto-play" class="btn" onclick="app.toggleAutoPlay()"
-                    style="min-width: 60px; padding: 0.5rem;">
-                    ▶ 自動
+                <button class="action-btn auto" onclick="app.toggleAutoPlay()" id="btn-auto">
+                    <i data-lucide="play"></i>
+                    <span>自動</span>
                 </button>
-                <button class="btn" onclick="app.flipCard()" style="min-width: 60px; padding: 0.5rem;">
-                    めくる
+                <button class="action-btn flip" onclick="app.flipCard()">
+                    <i data-lucide="rotate-cw"></i>
+                    <span>めくる</span>
                 </button>
-                <button class="btn btn-swipe-right" onclick="app.rateCard(4)"
-                    style="min-width: 100px; padding: 0.5rem 1rem;">
-                    😄 完璧
+                <button class="action-btn correct" onclick="app.rateCard(4)">
+                    <i data-lucide="check"></i>
+                    <span>完璧</span>
                 </button>
             </div>
-        </div>
+        </section>
 
-        <!-- Edit View -->
-        <div id="edit-view" class="view hidden">
-            <div class="header-actions edit-header-container"
-                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <h2>問題リスト (<span id="list-count">0</span>)</h2>
-                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <button class="btn btn-sm"
-                        onclick="app.importCSV(document.getElementById('csv-input'))">CSV読込</button>
-                    <input type="file" id="csv-input" accept=".csv" style="display: none;"
-                        onchange="app.importCSV(this)">
-                    <button class="btn btn-sm" onclick="app.exportCSV()">CSV保存</button>
-                    <button class="btn btn-sm" onclick="app.exportJSON()">バックアップ(JSON)</button>
-                    <button class="btn btn-sm" onclick="document.getElementById('json-input').click()">復元(JSON)</button>
-                    <input type="file" id="json-input" accept=".json" style="display: none;"
-                        onchange="app.importJSON(this)">
+        <!-- ==================== QUIZ VIEW ==================== -->
+        <section id="quiz-view" class="view">
+            <!-- Quiz Setup -->
+            <div id="quiz-setup" class="quiz-setup-card">
+                <div class="quiz-setup-icon">
+                    <i data-lucide="trophy"></i>
+                </div>
+                <h2>実力テスト</h2>
+                <p class="subtitle">ランダムに出題して実力をチェック！</p>
+
+                <div id="quiz-resume-banner" class="resume-banner hidden">
+                    <p>中断中のテストがあります</p>
+                    <div class="resume-actions">
+                        <button class="btn-sm primary" onclick="app.resumeQuiz()">再開</button>
+                        <button class="btn-sm" onclick="app.discardQuiz()">破棄</button>
+                    </div>
+                </div>
+
+                <div class="quiz-options">
+                    <div class="option-group">
+                        <label>出題形式</label>
+                        <div class="toggle-group">
+                            <button class="toggle-btn active" data-type="4choice"
+                                onclick="app.setQuizType(this)">4択</button>
+                            <button class="toggle-btn" data-type="input" onclick="app.setQuizType(this)">記述式</button>
+                        </div>
+                    </div>
+                    <div class="option-group">
+                        <label>出題数</label>
+                        <div class="toggle-group">
+                            <button class="toggle-btn" data-count="5" onclick="app.setQuizCount(this)">5問</button>
+                            <button class="toggle-btn active" data-count="10"
+                                onclick="app.setQuizCount(this)">10問</button>
+                            <button class="toggle-btn" data-count="20" onclick="app.setQuizCount(this)">20問</button>
+                            <button class="toggle-btn" data-count="all" onclick="app.setQuizCount(this)">全問</button>
+                        </div>
+                    </div>
+                    <div class="option-group">
+                        <label>フォルダ</label>
+                        <select id="quiz-folder-select" class="select-modern">
+                            <option value="All">すべて</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn-primary btn-lg" onclick="app.startQuiz()">
+                    <i data-lucide="play"></i> テスト開始
+                </button>
+            </div>
+
+            <!-- Quiz In-Progress -->
+            <div id="quiz-active" class="hidden">
+                <div class="quiz-header">
+                    <div class="quiz-progress-info">
+                        <span class="quiz-num"><span id="quiz-index">1</span>/<span id="quiz-total">10</span></span>
+                        <div class="quiz-timer" id="quiz-timer">00:00</div>
+                    </div>
+                    <div class="quiz-progress-bar">
+                        <div class="quiz-progress-fill" id="quiz-progress-fill"></div>
+                    </div>
+                    <div class="quiz-score-display">
+                        Score: <span id="quiz-score">0</span>
+                    </div>
+                </div>
+
+                <div class="quiz-question-card">
+                    <div class="quiz-q-text" id="quiz-question"></div>
+                    <img id="quiz-image" class="card-img hidden" alt="">
+                </div>
+
+                <!-- 4-Choice Options -->
+                <div id="quiz-choices" class="quiz-choices"></div>
+
+                <!-- Typing Input -->
+                <div id="quiz-typing" class="quiz-typing hidden">
+                    <input type="text" id="quiz-input" class="input-modern" placeholder="答えを入力..." autocomplete="off">
+                    <button class="btn-primary" onclick="app.submitTypingAnswer()">回答</button>
+                </div>
+
+                <!-- Explanation after answer -->
+                <div id="quiz-feedback" class="quiz-feedback hidden">
+                    <div id="quiz-feedback-icon"></div>
+                    <div id="quiz-feedback-text"></div>
+                    <div id="quiz-explanation-text" class="explanation-text"></div>
+                    <button class="btn-primary" onclick="app.nextQuizQuestion()">次へ →</button>
                 </div>
             </div>
 
-            <!-- Add Button (Floating or Top) -->
-            <button class="btn btn-primary" onclick="app.openModal('add')"
-                style="width: 100%; margin-bottom: 1rem; justify-content: center;">
-                <i data-lucide="plus"></i> 問題を追加
+            <!-- Quiz Result -->
+            <div id="quiz-result" class="hidden">
+                <div class="result-card">
+                    <div class="result-icon" id="result-icon"></div>
+                    <h2 id="result-title">結果発表</h2>
+                    <div class="result-score" id="result-score-display"></div>
+                    <p id="result-message"></p>
+                    <div id="result-wrong-list"></div>
+                    <div class="result-actions">
+                        <button class="btn-primary" onclick="app.startQuiz()">もう一度</button>
+                        <button class="btn-outline hidden" id="btn-review-wrong"
+                            onclick="app.startReviewQuiz()">間違いを復習</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== EDIT VIEW ==================== -->
+        <section id="edit-view" class="view">
+            <div class="edit-header">
+                <h2>カード管理 <span class="count-badge" id="edit-count">0</span></h2>
+                <div class="edit-actions">
+                    <button class="btn-sm" onclick="app.exportJSON()"><i data-lucide="download"></i> バックアップ</button>
+                    <button class="btn-sm" onclick="document.getElementById('json-input').click()"><i
+                            data-lucide="upload"></i> 復元</button>
+                    <input type="file" id="json-input" accept=".json" class="hidden" onchange="app.importJSON(this)">
+                    <button class="btn-sm" onclick="app.exportCSV()"><i data-lucide="file-spreadsheet"></i> CSV</button>
+                    <input type="file" id="csv-input" accept=".csv" class="hidden" onchange="app.importCSV(this)">
+                </div>
+            </div>
+
+            <button class="btn-primary btn-add" onclick="app.openModal('add')">
+                <i data-lucide="plus"></i> 新しいカードを追加
             </button>
 
-            <!-- Modal for Add/Edit -->
-            <div id="edit-modal" class="modal-overlay hidden">
-                <div class="modal-content">
-                    <h3 id="modal-title">問題を追加</h3>
-                    <form id="add-card-form" onsubmit="app.handleFormSubmit(event)">
-                        <div class="form-group">
-                            <label>問題文</label>
-                            <textarea id="input-question" required placeholder="例: 交流回路におけるインピーダンスとは？"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>答え</label>
-                            <textarea id="input-answer" required
-                                placeholder="例: 電流の流れにくさを表す量で、抵抗とリアクタンスのベクトル和。"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>解説 (任意)</label>
-                            <textarea id="input-explanation" placeholder="例: 【定義】... (補足情報など)"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>フォルダ</label>
-                            <input type="text" id="input-folder" list="folder-list" placeholder="フォルダ名 (例: メイン)"
-                                style="padding: 10px; border: 1px solid #ddd; border-radius: 8px; width: 100%; box-sizing: border-box;">
-                            <datalist id="folder-list"></datalist>
-                        </div>
-                        <div class="form-group">
-                            <label>タグ (カンマ区切り)</label>
-                            <input type="text" id="input-tags" placeholder="例: 電気, 法規, 公式">
-                        </div>
-                        <div class="form-group">
-                            <label>画像 (任意)</label>
-                            <input type="file" id="input-image" accept="image/*">
-                        </div>
-                        <div class="form-actions" style="display: flex; gap: 1rem; justify-content: flex-end;">
-                            <button type="button" class="btn" onclick="app.closeModal()">キャンセル</button>
-                            <button type="submit" id="btn-submit-card" class="btn btn-primary">追加</button>
-                        </div>
-                    </form>
+            <!-- Folder Toolbar -->
+            <div class="folder-toolbar-row">
+                <select id="edit-folder-select" class="select-modern" onchange="app.handleEditFolderChange(this.value)">
+                    <option value="All">すべてのフォルダ</option>
+                </select>
+                <div class="folder-actions-group">
+                    <button class="icon-btn-sm" onclick="app.createFolder()" title="新規フォルダ"><i
+                            data-lucide="folder-plus"></i></button>
+                    <button class="icon-btn-sm" onclick="app.renameFolder()" title="名前変更"><i
+                            data-lucide="pencil"></i></button>
+                    <button class="icon-btn-sm" onclick="app.toggleFolderLock()" title="ロック切替" id="btn-lock"><i
+                            data-lucide="unlock"></i></button>
+                    <button class="icon-btn-sm danger" onclick="app.deleteFolder()" title="削除"><i
+                            data-lucide="trash-2"></i></button>
                 </div>
             </div>
 
-            <!-- Search & Filter -->
-            <div class="search-container" style="flex-wrap: wrap; row-gap: 1rem; align-items: center;">
-                <div class="folder-toolbar" style="flex: 2; min-width: 300px; gap: 0.5rem;">
-                    <select id="edit-folder-select" onchange="app.handleFolderChange(this.value)"
-                        style="padding: 0.5rem; border-radius: 8px; border: 1px solid #cbd5e1; flex-grow: 1; min-width: 150px;">
-                        <option value="All">すべてのフォルダ</option>
-                    </select>
-
-                    <div class="btn-group">
-                        <button id="btn-lock-folder" class="btn-icon" title="フォルダをロック" onclick="app.toggleFolderLock()">
-                            <i data-lucide="unlock"></i>
-                        </button>
-                        <button id="btn-rename-folder" class="btn-icon" title="名前変更" onclick="app.renameFolder()">
-                            <i data-lucide="pencil"></i>
-                        </button>
-                        <button id="btn-delete-folder" class="btn-icon delete" title="フォルダ削除"
-                            onclick="app.initiateDeleteFolder()">
-                            <i data-lucide="trash-2"></i>
-                        </button>
-                    </div>
-
-                    <button class="btn btn-sm" onclick="app.createFolder()" title="新規フォルダ作成"
-                        style="white-space: nowrap;">
-                        <i data-lucide="folder-plus"></i> <span style="margin-left: 4px;">作成</span>
-                    </button>
-                </div>
-
-                <div style="flex: 1; display: flex; gap: 0.5rem; min-width: 300px;">
-                    <input type="text" id="search-input" placeholder="検索 (キーワード)..." oninput="app.renderEditMode()"
-                        style="padding: 0.5rem; border-radius: 8px; border: 1px solid #cbd5e1; flex: 1;">
+            <div class="search-row">
+                <div class="search-box">
+                    <i data-lucide="search"></i>
+                    <input type="text" id="search-input" placeholder="検索..." oninput="app.renderEditList()">
                 </div>
             </div>
 
             <!-- Bulk Action Bar -->
-            <div id="bulk-action-bar" class="hidden"
-                style="background: #f0f9ff; padding: 0.75rem; margin-bottom: 1rem; border-radius: 8px; border: 1px solid #bae6fd; display: flex; align-items: center; justify-content: space-between;">
-                <span style="margin-right: 1rem; font-weight: bold; color: #0369a1;"><span
-                        id="bulk-selected-count">0</span>件を選択中</span>
-                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                    <select id="bulk-folder-select"
-                        style="padding: 0.4rem; border-radius: 6px; border: 1px solid #cbd5e1; min-width: 150px;">
-                        <!-- Populated by JS -->
-                    </select>
-                    <button class="btn btn-sm" onclick="app.moveSelectedCards()">移動</button>
-                    <button class="btn btn-sm btn-danger" onclick="app.deleteSelectedCards()">削除</button>
+            <div id="bulk-bar" class="bulk-bar hidden">
+                <span><strong id="bulk-count">0</strong>件選択中</span>
+                <div class="bulk-actions">
+                    <select id="bulk-folder-target" class="select-sm"></select>
+                    <button class="btn-sm primary" onclick="app.moveSelected()">移動</button>
+                    <button class="btn-sm danger" onclick="app.deleteSelected()">削除</button>
                 </div>
             </div>
 
-            <!-- List Container -->
-            <div id="card-list-container" class="card-list" style="margin-top: 0;"></div>
-        </div>
+            <div id="card-list" class="card-list-grid"></div>
+        </section>
 
-        <!-- Dashboard View -->
-        <div id="dashboard-view" class="view hidden">
-            <h2>学習データの分析</h2>
-            <div class="stats-container">
-                <div class="stat-box">
-                    <h3>学習率</h3>
-                    <div class="pie-chart" id="status-chart"></div>
-                    <div class="stat-legend">
-                        <div><span class="dot-known"></span> 覚えた: <span id="stat-known">0</span></div>
-                        <div><span class="dot-unknown"></span> まだ: <span id="stat-unknown">0</span></div>
-                    </div>
+        <!-- ==================== STATS VIEW ==================== -->
+        <section id="stats-view" class="view">
+            <h2 class="section-title">学習データ分析</h2>
+
+            <div class="stats-grid">
+                <div class="stat-card accent-blue">
+                    <div class="stat-icon"><i data-lucide="layers"></i></div>
+                    <div class="stat-value" id="stat-total">0</div>
+                    <div class="stat-label">総カード数</div>
                 </div>
-                <div class="stat-box">
-                    <h3>登録数</h3>
-                    <p class="stat-number" id="stat-total">0</p>
+                <div class="stat-card accent-green">
+                    <div class="stat-icon"><i data-lucide="check-circle"></i></div>
+                    <div class="stat-value" id="stat-mastered">0</div>
+                    <div class="stat-label">習得済み</div>
+                </div>
+                <div class="stat-card accent-amber">
+                    <div class="stat-icon"><i data-lucide="clock"></i></div>
+                    <div class="stat-value" id="stat-due">0</div>
+                    <div class="stat-label">要復習</div>
+                </div>
+                <div class="stat-card accent-purple">
+                    <div class="stat-icon"><i data-lucide="flame"></i></div>
+                    <div class="stat-value" id="stat-streak">0</div>
+                    <div class="stat-label">連続日数</div>
                 </div>
             </div>
 
-            <!-- Learning Heatmap -->
-            <div style="width: 100%; overflow-x: auto; margin-top: 2rem; margin-bottom: 2rem;">
-                <h3 style="font-size: 1rem; color: var(--text-secondary); margin-bottom: 0.5rem;">学習記録 (過去90日)</h3>
-                <div id="heatmap-container" class="heatmap-grid"></div>
-            </div>
-        </div>
-
-        <!-- Quiz View -->
-        <div id="quiz-view" class="view hidden">
-            <div id="quiz-start">
-                <div id="quiz-resume-banner" class="hidden"></div>
-                <h2>実力テスト</h2>
-                <p>ランダムに10問出題されます。</p>
-                <div class="form-group">
-                    <label>形式</label>
-                    <select id="quiz-type">
-                        <option value="4choice">4択クイズ</option>
-                        <option value="input">記述式 (タイピング)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>フォルダ</label>
-                    <select id="quiz-folder-select">
-                        <option value="All">すべてのフォルダ</option>
-                    </select>
-                </div>
-                <button class="btn btn-primary" onclick="app.startQuiz()">テストを開始</button>
+            <div class="chart-card">
+                <h3>習得率</h3>
+                <div class="donut-container" id="donut-chart"></div>
+                <div class="donut-legend" id="donut-legend"></div>
             </div>
 
-
-            <div id="quiz-question-container" class="hidden">
-                <div class="quiz-header"
-                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <span style="font-weight: bold; font-size: 1.1rem;">
-                        <span id="quiz-index">1</span> <span
-                            style="color: var(--text-secondary); margin: 0 4px;">/</span> <span
-                            id="quiz-total">10</span>
-                    </span>
-                    <span id="quiz-score" style="font-weight: bold; color: var(--primary-color);">Score: 0</span>
-                </div>
-                <div class="card">
-                    <div id="quiz-question" class="card-question"></div>
-                    <img id="quiz-image" class="card-image hidden">
-                </div>
-                <div id="quiz-options" class="choices-grid">
-                    <!-- Buttons injected here -->
-                </div>
-
-                <div id="quiz-explanation-container" class="hidden"
-                    style="margin-top: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px;">
-                    <div id="quiz-explanation" style="white-space: pre-wrap; margin-bottom: 1rem;"></div>
-                    <button id="btn-next-question" class="btn btn-primary" style="width: 100%;"
-                        onclick="app.nextQuizQuestion()">次へ</button>
+            <div class="chart-card">
+                <h3>学習記録（過去90日）</h3>
+                <div class="heatmap-scroll">
+                    <div class="heatmap" id="heatmap"></div>
                 </div>
             </div>
 
-            <div id="quiz-result" class="hidden">
-                <h2>結果発表</h2>
-                <p id="score-message">素晴らしい！</p>
-                <p id="score-message">素晴らしい！</p>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
-                    <button class="btn btn-primary" onclick="app.startQuiz()">もう一度</button>
-                    <button id="btn-review-quiz" class="btn btn-warning hidden"
-                        onclick="app.startReviewQuiz()">間違えた問題を復習</button>
-                </div>
+            <div class="chart-card">
+                <h3>フォルダ別カード数</h3>
+                <div id="folder-chart" class="folder-bars"></div>
             </div>
-        </div>
+        </section>
     </main>
 
-    <!-- Delete Folder Modal -->
-    <div id="delete-folder-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <h3 id="delete-modal-title">フォルダを削除</h3>
-            <p id="delete-modal-msg">このフォルダを削除しますか？</p>
-
-            <div id="delete-options" class="hidden">
-                <div class="form-group">
-                    <label>
-                        <input type="radio" name="delete-action" value="delete" checked>
-                        フォルダ内の問題も全て削除する
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="radio" name="delete-action" value="move">
-                        別のフォルダへ移動する
-                    </label>
-                    <select id="move-dest-folder" class="form-control" style="width: 100%; margin-top: 5px;" disabled>
-                        <!-- Populated by JS -->
-                    </select>
-                </div>
+    <!-- Add/Edit Card Modal -->
+    <div id="card-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="modal-title">カードを追加</h3>
+                <button class="icon-btn" onclick="app.closeModal()"><i data-lucide="x"></i></button>
             </div>
-
-            <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem;">
-                <button class="btn"
-                    onclick="document.getElementById('delete-folder-modal').classList.add('hidden')">キャンセル</button>
-                <button class="btn btn-danger" onclick="app.confirmDeleteFolder()">削除を実行</button>
-            </div>
+            <form id="card-form" onsubmit="app.handleFormSubmit(event)">
+                <div class="field">
+                    <label>問題文 <span class="required">*</span></label>
+                    <textarea id="input-question" required placeholder="問題を入力..." rows="3"></textarea>
+                </div>
+                <div class="field">
+                    <label>答え <span class="required">*</span></label>
+                    <textarea id="input-answer" required placeholder="答えを入力..." rows="3"></textarea>
+                </div>
+                <div class="field">
+                    <label>解説（任意）</label>
+                    <textarea id="input-explanation" placeholder="補足説明..." rows="2"></textarea>
+                </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label>フォルダ</label>
+                        <input type="text" id="input-folder" list="folder-datalist" placeholder="メイン">
+                        <datalist id="folder-datalist"></datalist>
+                    </div>
+                    <div class="field">
+                        <label>タグ</label>
+                        <input type="text" id="input-tags" placeholder="例: 電気, 法規">
+                    </div>
+                </div>
+                <div class="field">
+                    <label>画像（任意）</label>
+                    <input type="file" id="input-image" accept="image/*">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline" onclick="app.closeModal()">キャンセル</button>
+                    <button type="submit" class="btn-primary" id="btn-submit">追加</button>
+                </div>
+            </form>
         </div>
     </div>
 
     <!-- Toast Container -->
     <div id="toast-container"></div>
 
-    <script src="data.js?v=3"></script>
-    <script src="script.js?v=3"></script>
-    <script>
-        lucide.createIcons();
+    <!-- Confetti Canvas -->
+    <canvas id="confetti-canvas"></canvas>
 
-        // Register Service Worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('service-worker.js')
-                    .then(registration => {
-                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                    }, err => {
-                        console.log('ServiceWorker registration failed: ', err);
-                    });
-            });
-        }
-    </script>
+    <!-- Bottom Navigation (Mobile) -->
+    <nav id="bottom-nav">
+        <button class="bnav-btn active" data-mode="study" onclick="app.setMode('study')">
+            <i data-lucide="book-open"></i>
+            <span>学習</span>
+        </button>
+        <button class="bnav-btn" data-mode="quiz" onclick="app.setMode('quiz')">
+            <i data-lucide="list-checks"></i>
+            <span>テスト</span>
+        </button>
+        <button class="bnav-btn" data-mode="edit" onclick="app.setMode('edit')">
+            <i data-lucide="file-edit"></i>
+            <span>編集</span>
+        </button>
+        <button class="bnav-btn" data-mode="stats" onclick="app.setMode('stats')">
+            <i data-lucide="bar-chart-3"></i>
+            <span>分析</span>
+        </button>
+    </nav>
+
+    <script src="data.js"></script>
+    <script src="app_core.js"></script>
+    <script src="app_features.js"></script>
+    <script>lucide.createIcons();</script>
 </body>
 
 </html>

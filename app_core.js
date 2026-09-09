@@ -9,7 +9,8 @@ class App {
             quizQueue: [], quizIndex: 0, quizScore: 0, quizAnswered: false,
             quizWrong: [], quizTimerInterval: null, quizSeconds: 0,
             streak: 0, lastStudyDate: null, studyLog: {},
-            filterDue: false, lockedFolders: new Set(), theme: 'light'
+            filterDue: false, lockedFolders: new Set(), theme: 'light',
+            sessionWrongCardIds: new Set()
         };
     }
 
@@ -137,6 +138,7 @@ class App {
 
     // === STUDY MODE ===
     updateShuffleOrder() {
+        if (this.state.sessionWrongCardIds) this.state.sessionWrongCardIds.clear();
         const cards = this.getFilteredCards();
         this.state.shuffleOrder = cards.map((_, i) => i);
         const btn = document.getElementById('btn-shuffle');
@@ -190,6 +192,13 @@ class App {
         if (!card) return;
         const real = this.state.cards.find(c => c.id === card.id);
         if (!real) return;
+
+        if (quality < 3) {
+            this.state.sessionWrongCardIds.add(real.id);
+        } else {
+            this.state.sessionWrongCardIds.delete(real.id);
+        }
+
         this.calculateNextReview(real, quality);
         this.markStudied();
         this.animateSwipe(quality >= 3 ? 'right' : 'left');
@@ -222,6 +231,18 @@ class App {
         if (el) { el.classList.add('swipe-' + dir); }
     }
 
+    prevCard() {
+        if (this.state.currentCardIndex > 0) {
+            this.state.currentCardIndex--;
+            this.state.isFlipped = false;
+            const el = document.getElementById('flashcard');
+            if (el) el.classList.remove('swipe-left', 'swipe-right', 'flipped');
+            this.renderStudy();
+        } else {
+            this.showToast('これが最初の問題です');
+        }
+    }
+
     nextCard() {
         const el = document.getElementById('flashcard');
         if (el) { el.classList.remove('swipe-left', 'swipe-right', 'flipped'); }
@@ -230,10 +251,56 @@ class App {
         if (this.state.currentCardIndex < this.state.shuffleOrder.length - 1) {
             this.state.currentCardIndex++;
         } else {
+            if (this.state.sessionWrongCardIds && this.state.sessionWrongCardIds.size > 0) {
+                if (typeof this.saveSessionHistory === 'function') {
+                    this.saveSessionHistory();
+                }
+                const msg = document.getElementById('review-confirm-msg');
+                if (msg) msg.textContent = `今回間違えた問題（${this.state.sessionWrongCardIds.size}問）をもう一度復習しますか？`;
+                const modal = document.getElementById('review-confirm-modal');
+                if (modal) modal.classList.remove('hidden');
+                return;
+            }
             this.showToast('🎉 全カード完了！');
             this.state.currentCardIndex = 0;
+            if (this.state.sessionWrongCardIds) this.state.sessionWrongCardIds.clear();
             this.updateShuffleOrder();
         }
+        this.renderStudy();
+    }
+
+    endStudySession() {
+        const modal = document.getElementById('review-confirm-modal');
+        if (modal) modal.classList.add('hidden');
+        this.showToast('🎉 全カード完了！');
+        this.state.currentCardIndex = 0;
+        if (this.state.sessionWrongCardIds) this.state.sessionWrongCardIds.clear();
+        this.updateShuffleOrder();
+        this.renderStudy();
+    }
+
+    startMissedReview() {
+        const modal = document.getElementById('review-confirm-modal');
+        if (modal) modal.classList.add('hidden');
+        
+        const cards = this.getFilteredCards();
+        const wrongIndices = [];
+        cards.forEach((c, i) => {
+            if (this.state.sessionWrongCardIds.has(c.id)) {
+                wrongIndices.push(i);
+            }
+        });
+        this.state.shuffleOrder = wrongIndices;
+        
+        const btn = document.getElementById('btn-shuffle');
+        if (btn && btn.classList.contains('active')) {
+            for (let i = this.state.shuffleOrder.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [this.state.shuffleOrder[i], this.state.shuffleOrder[j]] = [this.state.shuffleOrder[j], this.state.shuffleOrder[i]];
+            }
+        }
+        this.state.currentCardIndex = 0;
+        this.state.sessionWrongCardIds.clear();
         this.renderStudy();
     }
 
@@ -389,7 +456,7 @@ class App {
     renderStudy() {
         this.populateFolderSelect('study-folder-select', this.state.currentFolder);
         const cards = this.getFilteredCards();
-        const total = cards.length;
+        const total = this.state.shuffleOrder.length;
         const cur = Math.min(this.state.currentCardIndex + 1, total);
         document.getElementById('study-current').textContent = cur;
         document.getElementById('study-total').textContent = total;

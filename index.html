@@ -104,9 +104,9 @@
                     <i data-lucide="play"></i>
                     <span>自動</span>
                 </button>
-                <button class="action-btn flip" onclick="app.flipCard()">
-                    <i data-lucide="rotate-cw"></i>
-                    <span>めくる</span>
+                <button class="action-btn back" onclick="app.prevCard()" id="btn-prev">
+                    <i data-lucide="arrow-left"></i>
+                    <span>戻る</span>
                 </button>
                 <button class="action-btn correct" onclick="app.rateCard(4)">
                     <i data-lucide="check"></i>
@@ -318,6 +318,13 @@
                 <h3>フォルダ別カード数</h3>
                 <div id="folder-chart" class="folder-bars"></div>
             </div>
+
+            <div class="chart-card">
+                <h3>過去の学習履歴</h3>
+                <div id="study-history-list" class="history-list">
+                    <!-- 履歴がここに動的に追加されます -->
+                </div>
+            </div>
         </section>
     </main>
 
@@ -361,6 +368,19 @@
                     <button type="submit" class="btn-primary" id="btn-submit">追加</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Review Confirm Modal -->
+    <div id="review-confirm-modal" class="modal-overlay hidden">
+        <div class="modal-card text-center" style="max-width: 350px;">
+            <div class="modal-icon" style="font-size: 3rem; margin-bottom: 1rem;">🎉</div>
+            <h3 style="margin-bottom: 0.5rem;">1周終わりました！</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;" id="review-confirm-msg">今回間違えた問題（0問）をもう一度復習しますか？</p>
+            <div class="modal-footer" style="justify-content: center; gap: 1rem;">
+                <button type="button" class="btn-outline" onclick="app.endStudySession()">終了する</button>
+                <button type="button" class="btn-primary" onclick="app.startMissedReview()">復習する</button>
+            </div>
         </div>
     </div>
 

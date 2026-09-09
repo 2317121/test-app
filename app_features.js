@@ -805,6 +805,7 @@
         this.renderDonut(mastered, cards.length);
         this.renderHeatmap();
         this.renderFolderChart();
+        this.renderHistoryList();
     };
 
     Base.prototype.renderDonut = function (mastered, total) {
@@ -860,6 +861,86 @@
     Base.prototype.escHtml = function (s) {
         if (!s) return '';
         return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    };
+
+    // === HISTORY ===
+    Base.prototype.saveSessionHistory = function () {
+        if (!this.state.sessionWrongCardIds || this.state.sessionWrongCardIds.size === 0) return;
+        const historyStr = localStorage.getItem('neuronq_session_history');
+        let history = [];
+        if (historyStr) {
+            try { history = JSON.parse(historyStr); } catch(e){}
+        }
+        history.unshift({
+            id: 'hist_' + Date.now(),
+            date: new Date().toISOString(),
+            wrongIds: Array.from(this.state.sessionWrongCardIds),
+            totalCount: this.state.shuffleOrder.length
+        });
+        // Keep only last 50 sessions
+        if (history.length > 50) history = history.slice(0, 50);
+        localStorage.setItem('neuronq_session_history', JSON.stringify(history));
+    };
+
+    Base.prototype.renderHistoryList = function () {
+        const container = document.getElementById('study-history-list');
+        if (!container) return;
+        const historyStr = localStorage.getItem('neuronq_session_history');
+        let history = [];
+        if (historyStr) {
+            try { history = JSON.parse(historyStr); } catch(e){}
+        }
+        if (history.length === 0) {
+            container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.9rem;">履歴はありません</p>';
+            return;
+        }
+        container.innerHTML = history.map(h => {
+            const d = new Date(h.date);
+            const dateStr = `${d.getMonth()+1}月${d.getDate()}日 ${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`;
+            return `
+            <div class="history-item" onclick="app.startHistoryReview('${h.id}')">
+                <div>
+                    <div class="history-date">${dateStr}</div>
+                    <div class="history-stats">全体: ${h.totalCount}問</div>
+                </div>
+                <div class="history-badge">
+                    間違え: ${h.wrongIds.length}問 <i data-lucide="chevron-right" style="width:14px;height:14px;vertical-align:middle;"></i>
+                </div>
+            </div>`;
+        }).join('');
+        lucide.createIcons({root: container});
+    };
+
+    Base.prototype.startHistoryReview = function (historyId) {
+        const historyStr = localStorage.getItem('neuronq_session_history');
+        if (!historyStr) return;
+        const history = JSON.parse(historyStr);
+        const session = history.find(h => h.id === historyId);
+        if (!session || !session.wrongIds || session.wrongIds.length === 0) {
+            this.showToast('復習データが見つかりません');
+            return;
+        }
+        
+        const cards = this.getFilteredCards();
+        const wrongIndices = [];
+        const wrongSet = new Set(session.wrongIds);
+        cards.forEach((c, i) => {
+            if (wrongSet.has(c.id)) {
+                wrongIndices.push(i);
+            }
+        });
+        
+        if (wrongIndices.length === 0) {
+            this.showToast('問題データが削除されたか見つかりません');
+            return;
+        }
+        
+        this.state.shuffleOrder = wrongIndices;
+        this.state.currentCardIndex = 0;
+        this.state.sessionWrongCardIds.clear();
+        this.setMode('study'); // Switch to study tab
+        this.renderStudy();
+        this.showToast('過去の復習を開始します');
     };
 
 })();

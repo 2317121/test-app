@@ -1,6 +1,6 @@
 {
-  "name": "技能照査ドリル",
-  "short_name": "技能照査",
+  "name": "勉強アプリ",
+  "short_name": "勉強アプリ",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f8fafc",

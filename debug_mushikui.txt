@@ -1,0 +1,35 @@
+--- MATCH 0 ---
+id: T_0736_a
+folder: 教科書_虫食い (Part 1)
+question: Frictional force is caused by (     ) to relative motion between surfaces in contact.\n\n【選択肢】\n1. capacitance\n2. resistance\n3. inductance\n4. impedance
+answer: resistance
+explanation: 
+
+--- MATCH 1 ---
+id: T_0736_b
+folder: 教科書_虫食い (Part 1)
+question: The weight of a body is the force of (     ) that the earth exerts on that body.\n\n【選択肢】\n1. attraction\n2. repulsion\n3. impulsion\n4. friction
+answer: attraction
+explanation: 
+
+--- MATCH 2 ---
+id: T_0736_c
+folder: 教科書_虫食い (Part 1)
+question: A (     ) is an animal or plant that once lived and that has been preserved.\n\n【選択肢】\n1. museum\n2. dinosaur\n3. zoo\n4. fossil
+answer: fossil
+explanation: 
+
+--- MATCH 3 ---
+id: T_0736_d
+folder: 教科書_虫食い (Part 1)
+question: Wind will be produced by the sun as (     ) as it shines on the earth.\n\n【選択肢】\n1. well\n2. far\n3. same\n4. long
+answer: long
+explanation: 
+
+--- MATCH 4 ---
+id: T_0736_e
+folder: 教科書_虫食い (Part 1)
+question: The proton has a mass equal to 1,840 (     ) that of the electron.\n\n【選択肢】\n1. more than\n2. times\n3. bigger\n4. wider
+answer: times
+explanation: 
+

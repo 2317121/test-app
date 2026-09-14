@@ -221,18 +221,12 @@ window.initialData = [
     { id: 'q_new_58', folder: 'セキュア', question: 'IPアドレス「192.168.1.150」、サブネットマスク「255.255.255.192 (/26)」のホストが所属する「ネットワークアドレス」はどれですか？', answer: '192.168.1.128', explanation: '【解説】\n/26は第4オクテットを64刻みで分割します。150は128～191の範囲なので、ネットワークアドレスは192.168.1.128です。(P.31)' },
     { id: 'q_new_59', folder: 'セキュア', question: 'IPアドレス「172.16.10.5」、サブネットマスク「255.255.255.240 (/28)」のネットワークにおける「ブロードキャストアドレス」はどれですか？', answer: '172.16.10.15', explanation: '【解説】\n/28のブロックサイズは16です。5は0～15の範囲なので、ブロードキャストアドレス（最後）は172.16.10.15です。(P.33)' },
     // --- IMG_0734 (文章) ---
-    { id: 'T_0734_1', folder: '教科書_文の構造', question: 'シフトレバーが逆になっている場合、機械は後方に動く。
-(1. backward 2. in 3. is 4. lever 5. machine 6. moves 7. reverse 8. shift 9. the 10. the 11. when)', answer: 'When the shift lever is in reverse, the machine moves backward.' },
-    { id: 'T_0734_2', folder: '教科書_文の構造', question: '銅は赤みがかった金属であり、優れた導体である。
-(1. a 2. an 3. and 4. conductor 5. copper 6. excellent 7. is 8. metal 9. reddish)', answer: 'Copper is a reddish metal and an excellent conductor.' },
-    { id: 'T_0734_3', folder: '教科書_文の構造', question: 'ゴムは紫外線に長時間さらされると弾性を失う。
-(1. a 2. after 3. being 4. elasticity 5. exposed 6. for 7. long 8. lose 9. rays 10. rubber 11. time 12. to 13. ultraviolet 14. will)', answer: 'Rubber will lose elasticity after being exposed to ultraviolet rays for a long time.' },
-    { id: 'T_0734_4', folder: '教科書_文の構造', question: 'すべての動植物は特定の数の染色体を持ち、すべての染色体は対になっている。
-(1. a 2. all 3. all 4. and 5. and 6. animals 7. are 8. chromosomes 9. chromosomes 10. have 11. in 12. number 13. of 14. pairs 15. plants 16. specific)', answer: 'All animals and plants have a specific number of chromosomes, and all chromosomes are in pairs.' },
-    { id: 'T_0734_5', folder: '教科書_文の構造', question: '太陽光と熱が入るのを防ぐため、エアコンを使用する際はカーテンを閉めてください。
-(1. air 2. and 3. close 4. coming 5. conditioner 6. curtains 7. from 8. heat 9. in 10. prevent 11. sunlight 12. the 13. to 14. using 15. when)', answer: 'Close curtains when using the air conditioner to prevent sunlight and heat from coming in.' },
-    { id: 'T_0734_6', folder: '教科書_文の構造', question: '許可されていない個人がコンピューターに侵入しようとすると、プログラムがアラームを鳴らします。
-(1. alarm 2. an 3. computer 4. get 5. if 6. individuals 7. into 8. program 9. sounds 10. the 11. to 12. try 13. unauthorized 14. your)', answer: 'If unauthorized individuals try to get into your computer, the program sounds an alarm.' },
+    { id: 'T_0734_1', folder: '教科書_文の構造', question: \'シフトレバーが逆になっている場合、機械は後方に動く。\n(1. backward 2. in 3. is 4. lever 5. machine 6. moves 7. reverse 8. shift 9. the 10. the 11. when)\', answer: 'When the shift lever is in reverse, the machine moves backward.' },
+    { id: 'T_0734_2', folder: '教科書_文の構造', question: \'銅は赤みがかった金属であり、優れた導体である。\n(1. a 2. an 3. and 4. conductor 5. copper 6. excellent 7. is 8. metal 9. reddish)\', answer: 'Copper is a reddish metal and an excellent conductor.' },
+    { id: 'T_0734_3', folder: '教科書_文の構造', question: \'ゴムは紫外線に長時間さらされると弾性を失う。\n(1. a 2. after 3. being 4. elasticity 5. exposed 6. for 7. long 8. lose 9. rays 10. rubber 11. time 12. to 13. ultraviolet 14. will)\', answer: 'Rubber will lose elasticity after being exposed to ultraviolet rays for a long time.' },
+    { id: 'T_0734_4', folder: '教科書_文の構造', question: \'すべての動植物は特定の数の染色体を持ち、すべての染色体は対になっている。\n(1. a 2. all 3. all 4. and 5. and 6. animals 7. are 8. chromosomes 9. chromosomes 10. have 11. in 12. number 13. of 14. pairs 15. plants 16. specific)\', answer: 'All animals and plants have a specific number of chromosomes, and all chromosomes are in pairs.' },
+    { id: 'T_0734_5', folder: '教科書_文の構造', question: \'太陽光と熱が入るのを防ぐため、エアコンを使用する際はカーテンを閉めてください。\n(1. air 2. and 3. close 4. coming 5. conditioner 6. curtains 7. from 8. heat 9. in 10. prevent 11. sunlight 12. the 13. to 14. using 15. when)\', answer: 'Close curtains when using the air conditioner to prevent sunlight and heat from coming in.' },
+    { id: 'T_0734_6', folder: '教科書_文の構造', question: \'許可されていない個人がコンピューターに侵入しようとすると、プログラムがアラームを鳴らします。\n(1. alarm 2. an 3. computer 4. get 5. if 6. individuals 7. into 8. program 9. sounds 10. the 11. to 12. try 13. unauthorized 14. your)\', answer: 'If unauthorized individuals try to get into your computer, the program sounds an alarm.' },
 
     // --- IMG_0735 (単語) ---
     { id: 'T_0735_a', folder: '教科書_単語 (Part 1)', question: 'requisite\n\n【選択肢】\n1. 任意の\n2. 必須の\n3. 余分の', answer: '必須の', explanation: '' },
